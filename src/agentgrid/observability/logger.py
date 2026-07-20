@@ -30,7 +30,6 @@ def get_logger(name: str, **bindings: Any) -> logging.Logger:
         logger.addHandler(handler)
 
     if bindings:
-        extra = logging.LoggerAdapter(logger, bindings)
-        return extra.logger  # type: ignore[return-value]
+        return logging.LoggerAdapter(logger, bindings)  # type: ignore[return-value]
 
     return logger
