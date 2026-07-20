@@ -7,14 +7,15 @@ from pathlib import Path
 from typing import Any
 
 
-def load_config(path: str | Path = ".env") -> dict[str, str]:
+def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]:
     """Load a simple .env file into a dict.
 
     Supports KEY=VALUE lines. Lines starting with # are comments.
-    Does NOT override existing environment variables.
+    Does NOT override existing environment variables unless apply=True.
 
     Args:
         path: Path to the .env file.
+        apply: If True, set non-existing keys in os.environ.
 
     Returns:
         Dict of key-value pairs loaded from the file.
@@ -37,5 +38,9 @@ def load_config(path: str | Path = ".env") -> dict[str, str]:
             value = value.strip().strip('"').strip("'")
             if key not in os.environ:
                 config[key] = value
+
+    if apply:
+        for key, value in config.items():
+            os.environ[key] = value
 
     return config
