@@ -23,6 +23,7 @@ class ScheduledTask:
     delay_seconds: float = 0.0
     enabled: bool = True
     _last_run: float = 0.0
+    _scheduled_at: float = field(default_factory=time.time, repr=False)
     _run_count: int = 0
 
     @property
@@ -31,7 +32,7 @@ class ScheduledTask:
             return False
         now = time.time()
         if self._last_run == 0:
-            return now >= self.delay_seconds
+            return (now - self._scheduled_at) >= self.delay_seconds
         return (now - self._last_run) >= self.interval_seconds
 
 
