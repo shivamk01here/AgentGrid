@@ -32,6 +32,11 @@ class WorkflowEngine:
         """Register a step in the workflow."""
         if step.name in self._steps:
             raise ValueError(f"Step already registered: {step.name}")
+        for dep in step.dependencies:
+            if dep not in self._steps:
+                raise ValueError(
+                    f"Step '{step.name}' depends on '{dep}' which is not registered"
+                )
         self._steps[step.name] = step
         self._execution_order = self._resolve_order()
 
