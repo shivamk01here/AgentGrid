@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -52,7 +53,12 @@ class AgentRuntime:
         for attempt in range(1, self.max_retries + 1):
             self._iteration += 1
             try:
-                output = await self.agent.run(input_data)
+                if self.timeout_seconds is not None:
+                    output = await asyncio.wait_for(
+                        self.agent.run(input_data), timeout=self.timeout_seconds
+                    )
+                else:
+                    output = await self.agent.run(input_data)
                 logger.info(
                     "Runtime completed agent=%s iterations=%d",
                     self.agent.name,
@@ -67,6 +73,14 @@ class AgentRuntime:
                 }
             except NotImplementedError:
                 raise
+            except asyncio.TimeoutError:
+                last_error = f"Timed out after {self.timeout_seconds}s"
+                logger.warning(
+                    "Runtime attempt %d/%d timed out after %ss",
+                    attempt,
+                    self.max_retries,
+                    self.timeout_seconds,
+                )
             except Exception as exc:
                 last_error = str(exc)
                 logger.warning(
