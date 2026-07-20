@@ -50,6 +50,7 @@ class AgentRuntime:
         last_error: str | None = None
 
         for attempt in range(1, self.max_retries + 1):
+            self._iteration += 1
             try:
                 output = await self.agent.run(input_data)
                 logger.info(
