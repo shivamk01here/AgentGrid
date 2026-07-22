@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from agentgrid.agent.base import Agent, AgentConfig
@@ -18,7 +19,7 @@ class AgentRuntime:
     - Initialization and teardown
     - Iteration control
     - Error handling and retries
-    - Event emission
+    - Event emission (when an EventBus is attached to the agent)
     - Logging
     """
 
@@ -34,6 +35,17 @@ class AgentRuntime:
         self.timeout_seconds = timeout_seconds
         self._iteration = 0
 
+    async def _emit(self, topic: str, payload: dict[str, Any] | None = None) -> None:
+        """Emit an event if the agent has an EventBus attached."""
+        bus = self.agent._event_bus
+        if bus is None:
+            return
+        try:
+            from agentgrid.events.bus import Event
+            await bus.emit(Event(topic=topic, payload=payload, source=self.agent.id))
+        except Exception:
+            logger.debug("Failed to emit event topic=%s", topic)
+
     async def execute(self, input_data: str = "") -> dict[str, Any]:
         """Run the agent with full lifecycle management.
 
@@ -48,7 +60,10 @@ class AgentRuntime:
             self.agent.name,
             self.agent.config.max_iterations,
         )
+        await self._emit("agent.run.started", {"input": input_data})
+
         last_error: str | None = None
+        start_time = time.monotonic()
 
         for attempt in range(1, self.max_retries + 1):
             self._iteration += 1
@@ -59,18 +74,27 @@ class AgentRuntime:
                     )
                 else:
                     output = await self.agent.run(input_data)
+
+                duration = time.monotonic() - start_time
                 logger.info(
                     "Runtime completed agent=%s iterations=%d",
                     self.agent.name,
                     self._iteration,
                 )
-                return {
+                result = {
                     "output": output,
                     "iterations": self._iteration,
                     "success": True,
                     "error": None,
                     "attempt": attempt,
                 }
+                await self._emit("agent.run.completed", {
+                    "output": output,
+                    "iterations": self._iteration,
+                    "duration": duration,
+                    "attempt": attempt,
+                })
+                return result
             except NotImplementedError:
                 raise
             except asyncio.TimeoutError:
@@ -90,6 +114,12 @@ class AgentRuntime:
                     last_error,
                 )
 
+        duration = time.monotonic() - start_time
+        await self._emit("agent.run.failed", {
+            "error": last_error,
+            "iterations": self._iteration,
+            "duration": duration,
+        })
         return {
             "output": None,
             "iterations": self._iteration,
