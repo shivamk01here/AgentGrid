@@ -80,3 +80,47 @@ class TestToolRegistry:
         assert d["name"] == "echo"
         assert "description" in d
         assert "parameters" in d
+
+    @pytest.mark.asyncio
+    async def test_validation_rejects_missing_required_param(self, tool_registry):
+        tool_registry.register(SchemaTool())
+        result = await tool_registry.invoke("schema_tool")
+        assert result.success is False
+        assert "Missing required parameter" in result.error
+
+    @pytest.mark.asyncio
+    async def test_validation_accepts_valid_params(self, tool_registry):
+        tool_registry.register(SchemaTool())
+        result = await tool_registry.invoke("schema_tool", message="hello", count=3)
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_validation_rejects_wrong_type(self, tool_registry):
+        tool_registry.register(SchemaTool())
+        result = await tool_registry.invoke("schema_tool", message=123, count=3)
+        assert result.success is False
+        assert "expected type 'string'" in result.error
+
+
+class SchemaTool(BaseTool):
+    @property
+    def name(self) -> str:
+        return "schema_tool"
+
+    @property
+    def description(self) -> str:
+        return "Tool with schema validation"
+
+    @property
+    def parameters_schema(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string"},
+                "count": {"type": "integer"},
+            },
+            "required": ["message"],
+        }
+
+    async def execute(self, **kwargs) -> ToolResult:
+        return ToolResult.ok(kwargs)

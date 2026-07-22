@@ -42,13 +42,59 @@ class ToolRegistry:
     async def invoke(self, name: str, **kwargs: Any) -> ToolResult:
         """Invoke a tool by name with parameters.
 
-        Returns ToolResult.fail() if the tool is not found.
+        Validates kwargs against the tool's parameters_schema before execution.
+        Returns ToolResult.fail() if the tool is not found or validation fails.
         """
         tool = self.get(name)
         if tool is None:
             return ToolResult.fail(f"Tool not found: {name}")
+
+        validation_error = self._validate_params(tool, kwargs)
+        if validation_error:
+            return ToolResult.fail(validation_error)
+
         logger.info("Invoking tool: %s", name)
         return await tool.execute(**kwargs)
+
+    @staticmethod
+    def _validate_params(tool: BaseTool, kwargs: dict[str, Any]) -> str | None:
+        """Validate kwargs against a tool's parameters_schema.
+
+        Returns an error message string if validation fails, None otherwise.
+        Performs lightweight checks: required fields and basic type validation.
+        """
+        schema = tool.parameters_schema
+        if not schema or schema.get("type") != "object":
+            return None
+
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+
+        for field_name in required:
+            if field_name not in kwargs:
+                return f"Missing required parameter '{field_name}' for tool '{tool.name}'"
+
+        for param_name in kwargs:
+            if param_name in properties:
+                expected_type = properties[param_name].get("type")
+                if expected_type:
+                    value = kwargs[param_name]
+                    type_map = {
+                        "string": str,
+                        "integer": int,
+                        "number": (int, float),
+                        "boolean": bool,
+                        "array": list,
+                        "object": dict,
+                    }
+                    expected = type_map.get(expected_type)
+                    if expected and not isinstance(value, expected):
+                        return (
+                            f"Parameter '{param_name}' expected type '{expected_type}' "
+                            f"but got '{type(value).__name__}'"
+                        )
+
+        return None
 
     def list_tools(self) -> list[dict[str, Any]]:
         """Return metadata for all registered tools."""
