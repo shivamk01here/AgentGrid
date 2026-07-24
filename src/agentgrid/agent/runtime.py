@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agentgrid.agent.base import Agent, AgentConfig
+
+if TYPE_CHECKING:
+    from agentgrid.ratelimit.limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,7 @@ class AgentRuntime:
     - Iteration control
     - Error handling and retries
     - Event emission (when an EventBus is attached to the agent)
+    - Optional per-agent rate limiting
     - Logging
     """
 
@@ -29,10 +33,14 @@ class AgentRuntime:
         *,
         max_retries: int = 3,
         timeout_seconds: float | None = None,
+        rate_limiter: RateLimiter | None = None,
+        rate_limit_key: str | None = None,
     ) -> None:
         self.agent = agent
         self.max_retries = max_retries
         self.timeout_seconds = timeout_seconds
+        self._rate_limiter = rate_limiter
+        self._rate_limit_key = rate_limit_key or agent.id
         self._iteration = 0
 
     async def _emit(self, topic: str, payload: dict[str, Any] | None = None) -> None:
@@ -55,6 +63,22 @@ class AgentRuntime:
         Returns:
             A result dict with keys: output, iterations, success, error.
         """
+        if self._rate_limiter is not None:
+            rl_result = await self._rate_limiter.try_acquire(self._rate_limit_key)
+            if not rl_result.allowed:
+                logger.warning(
+                    "Rate limit exceeded for agent=%s key=%s",
+                    self.agent.name,
+                    self._rate_limit_key,
+                )
+                return {
+                    "output": None,
+                    "iterations": 0,
+                    "success": False,
+                    "error": f"Rate limit exceeded (retry after {rl_result.retry_after:.2f}s)",
+                    "attempt": 0,
+                }
+
         logger.info(
             "Runtime starting agent=%s iteration_limit=%d",
             self.agent.name,
