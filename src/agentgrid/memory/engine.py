@@ -82,7 +82,7 @@ class MemoryEngine:
             namespace=self.namespace,
             tags=tags or [],
             created_at=time.time(),
-            expires_at=(time.time() + ttl_seconds) if ttl_seconds else None,
+            expires_at=(time.time() + ttl_seconds) if ttl_seconds is not None else None,
         )
         await self._backend.store(key, value, entry)
         logger.debug("Stored key=%s namespace=%s", key, self.namespace)

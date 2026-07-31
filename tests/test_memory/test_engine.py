@@ -78,6 +78,14 @@ class TestMemoryEngine:
         assert entries[0].key == "alive"
 
     @pytest.mark.asyncio
+    async def test_zero_ttl_expires_immediately(self):
+        engine = MemoryEngine(namespace="test")
+        await engine.store("gone", "value", ttl_seconds=0)
+        import time
+        time.sleep(0.01)
+        assert await engine.retrieve("gone") is None
+
+    @pytest.mark.asyncio
     async def test_custom_backend(self):
         class DictBackend:
             def __init__(self):
