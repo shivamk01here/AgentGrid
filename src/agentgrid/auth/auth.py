@@ -47,6 +47,10 @@ class Authenticator:
         api_key = "fg_" + secrets.token_hex(32)
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
 
+        existing = self._identities.get(agent_id)
+        if existing is not None:
+            self._key_to_id.pop(existing.api_key_hash, None)
+
         identity = AgentIdentity(
             agent_id=agent_id,
             api_key_hash=key_hash,

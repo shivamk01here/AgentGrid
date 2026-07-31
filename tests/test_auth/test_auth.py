@@ -66,3 +66,10 @@ class TestAuthenticator:
         key2 = auth.create_identity("a2")
         assert auth.verify(key1).agent_id == "a1"
         assert auth.verify(key2).agent_id == "a2"
+
+    def test_old_key_invalid_after_regeneration(self):
+        auth = Authenticator()
+        old_key = auth.create_identity("agent-1")
+        new_key = auth.create_identity("agent-1")
+        assert auth.verify(old_key) is None
+        assert auth.verify(new_key).agent_id == "agent-1"
