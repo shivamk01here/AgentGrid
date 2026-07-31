@@ -88,9 +88,9 @@ class Scheduler:
         while self._running:
             for task in self._tasks.values():
                 if task.should_run:
+                    task._last_run = time.time()
                     try:
                         await task.handler()
-                        task._last_run = time.time()
                         task._run_count += 1
                     except Exception:
                         logger.exception("Scheduled task '%s' failed", task.name)

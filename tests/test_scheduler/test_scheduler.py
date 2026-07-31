@@ -82,6 +82,24 @@ class TestScheduler:
         await scheduler.stop()
 
     @pytest.mark.asyncio
+    async def test_failing_task_waits_for_interval(self):
+        call_count = 0
+
+        async def bad():
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("oops")
+
+        scheduler = Scheduler(tick_interval=0.05)
+        scheduler.add_task(ScheduledTask(
+            name="bad", handler=bad, interval_seconds=10.0
+        ))
+        await scheduler.start()
+        await asyncio.sleep(0.3)
+        await scheduler.stop()
+        assert call_count == 1
+
+    @pytest.mark.asyncio
     async def test_delayed_task(self):
         ran = False
 
