@@ -11,7 +11,7 @@ def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]
     """Load a simple .env file into a dict.
 
     Supports KEY=VALUE lines. Lines starting with # are comments.
-    Does NOT override existing environment variables unless apply=True.
+    Existing environment variables are never overridden.
 
     Args:
         path: Path to the .env file.
