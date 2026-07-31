@@ -84,6 +84,18 @@ class TestTokenBucket:
         b.reset()
         assert b.tokens == 3.0
 
+    def test_consume_waits_for_refill(self):
+        b = TokenBucket(capacity=5, refill_rate=10.0)
+        asyncio.get_event_loop().run_until_complete(b.consume(5))
+        result = asyncio.get_event_loop().run_until_complete(b.consume(1))
+        assert result is True
+        assert b.tokens < 5.0
+
+    def test_consume_above_capacity_raises(self):
+        b = TokenBucket(capacity=5, refill_rate=10.0)
+        with pytest.raises(ValueError, match="capacity"):
+            asyncio.get_event_loop().run_until_complete(b.consume(6))
+
 
 # ── RateLimiter ──────────────────────────────────────────────────
 

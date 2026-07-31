@@ -50,27 +50,21 @@ class TokenBucket:
     async def consume(self, n: int = 1) -> bool:
         """Try to consume *n* tokens.
 
-        Returns True immediately if tokens are available, otherwise
-        sleeps until enough tokens have been refilled.
+        Blocks until *n* tokens are available, then returns True.
         """
         if n <= 0:
             raise ValueError("n must be positive")
+        if n > self._capacity:
+            raise ValueError(f"n ({n}) cannot exceed bucket capacity ({self._capacity})")
 
-        async with self._lock:
-            self._refill()
-            if self._tokens >= n:
-                self._tokens -= n
-                return True
-
-        wait_time = (n - self._tokens) / self._refill_rate
-        await asyncio.sleep(wait_time)
-
-        async with self._lock:
-            self._refill()
-            if self._tokens >= n:
-                self._tokens -= n
-                return True
-        return False
+        while True:
+            async with self._lock:
+                self._refill()
+                if self._tokens >= n:
+                    self._tokens -= n
+                    return True
+                wait_time = (n - self._tokens) / self._refill_rate
+            await asyncio.sleep(wait_time)
 
     async def try_consume(self, n: int = 1) -> bool:
         """Non-blocking consume. Returns False if tokens are unavailable."""
