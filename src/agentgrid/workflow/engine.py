@@ -41,12 +41,17 @@ class WorkflowEngine:
         self._execution_order = self._resolve_order()
 
     def remove_step(self, name: str) -> bool:
-        """Remove a step by name."""
-        if name in self._steps:
-            del self._steps[name]
-            self._execution_order = self._resolve_order()
-            return True
-        return False
+        """Remove a step by name. Raises ValueError if other steps depend on it."""
+        if name not in self._steps:
+            return False
+        dependents = [s.name for s in self._steps.values() if name in s.dependencies]
+        if dependents:
+            raise ValueError(
+                f"Cannot remove step '{name}': still depended on by {dependents}"
+            )
+        del self._steps[name]
+        self._execution_order = self._resolve_order()
+        return True
 
     async def run(self, initial_context: dict[str, Any] | None = None) -> dict[str, StepResult]:
         """Execute all steps in dependency order.

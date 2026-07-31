@@ -148,3 +148,10 @@ class TestWorkflowEngine:
         engine.add_step(Step(name="a", handler=noop_handler))
         assert engine.remove_step("a") is True
         assert engine.remove_step("nonexistent") is False
+
+    def test_remove_step_with_dependents_raises(self):
+        engine = WorkflowEngine()
+        engine.add_step(Step(name="a", handler=noop_handler))
+        engine.add_step(Step(name="b", handler=noop_handler, dependencies=["a"]))
+        with pytest.raises(ValueError, match="depended on"):
+            engine.remove_step("a")
