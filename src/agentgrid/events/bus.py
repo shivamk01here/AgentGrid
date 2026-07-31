@@ -84,6 +84,8 @@ class EventBus:
 
     def get_history(self, topic: str | None = None, limit: int = 50) -> list[Event]:
         """Retrieve recent events, optionally filtered by topic."""
+        if limit <= 0:
+            return []
         events = self._history
         if topic:
             events = [e for e in events if self._matches(topic, e.topic)]

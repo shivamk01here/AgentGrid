@@ -52,6 +52,13 @@ class TestEventBus:
         assert len(history) == 2
 
     @pytest.mark.asyncio
+    async def test_get_history_zero_limit(self, event_bus):
+        await event_bus.emit(Event(topic="a"))
+        await event_bus.emit(Event(topic="b"))
+        assert event_bus.get_history(limit=0) == []
+        assert event_bus.get_history(limit=-1) == []
+
+    @pytest.mark.asyncio
     async def test_handler_error_does_not_crash(self, event_bus):
         async def bad_handler(event: Event):
             raise RuntimeError("oops")
