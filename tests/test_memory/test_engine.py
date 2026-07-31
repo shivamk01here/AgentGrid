@@ -86,6 +86,16 @@ class TestMemoryEngine:
         assert await engine.retrieve("gone") is None
 
     @pytest.mark.asyncio
+    async def test_expired_entries_purged_from_backend(self):
+        engine = MemoryEngine(namespace="test")
+        await engine.store("alive", "yes")
+        await engine.store("dead", "no", ttl_seconds=0)
+        import time
+        time.sleep(0.01)
+        await engine.list_all()
+        assert engine.size == 1
+
+    @pytest.mark.asyncio
     async def test_custom_backend(self):
         class DictBackend:
             def __init__(self):

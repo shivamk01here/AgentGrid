@@ -31,7 +31,10 @@ class InMemoryBackend:
         return False
 
     async def list_all(self) -> list[MemoryEntry]:
-        return [e for e in self._store.values() if not e.is_expired()]
+        expired = [key for key, entry in self._store.items() if entry.is_expired()]
+        for key in expired:
+            del self._store[key]
+        return list(self._store.values())
 
     async def clear(self) -> int:
         count = len(self._store)
