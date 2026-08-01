@@ -47,7 +47,9 @@ class EventBus:
 
     def subscribe(self, topic: str, handler: EventHandler) -> None:
         """Subscribe a handler to a topic pattern."""
-        self._handlers.setdefault(topic, []).append(handler)
+        handlers = self._handlers.setdefault(topic, [])
+        if handler not in handlers:
+            handlers.append(handler)
         logger.debug("Subscribed to topic=%s", topic)
 
     def unsubscribe(self, topic: str, handler: EventHandler) -> bool:

@@ -19,6 +19,19 @@ class TestEventBus:
         assert received[0].payload == "data"
 
     @pytest.mark.asyncio
+    async def test_duplicate_subscription_runs_once(self, event_bus):
+        received = []
+
+        async def handler(event: Event):
+            received.append(event)
+
+        event_bus.subscribe("test", handler)
+        event_bus.subscribe("test", handler)
+        count = await event_bus.emit(Event(topic="test"))
+        assert count == 1
+        assert len(received) == 1
+
+    @pytest.mark.asyncio
     async def test_wildcard_subscription(self, event_bus):
         received = []
 
