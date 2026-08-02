@@ -97,3 +97,33 @@ class TestAgentRuntime:
         runtime = AgentRuntime(agent)
         result = await runtime.execute("hello")
         assert result["success"] is True
+
+
+class TestRuntimeConfig:
+    def test_from_env_defaults(self):
+        from agentgrid.agent.config import RuntimeConfig
+        cfg = RuntimeConfig.from_env()
+        assert cfg.log_level == "INFO"
+        assert cfg.tracing_enabled is True
+        assert cfg.metrics_enabled is True
+        assert cfg.auth_enabled is False
+
+    def test_from_env_parses_1_as_true(self):
+        import os
+        os.environ["AGENTGRID_TRACING_ENABLED"] = "1"
+        try:
+            from agentgrid.agent.config import RuntimeConfig
+            cfg = RuntimeConfig.from_env()
+            assert cfg.tracing_enabled is True
+        finally:
+            del os.environ["AGENTGRID_TRACING_ENABLED"]
+
+    def test_from_env_parses_yes_as_true(self):
+        import os
+        os.environ["AGENTGRID_AUTH_ENABLED"] = "yes"
+        try:
+            from agentgrid.agent.config import RuntimeConfig
+            cfg = RuntimeConfig.from_env()
+            assert cfg.auth_enabled is True
+        finally:
+            del os.environ["AGENTGRID_AUTH_ENABLED"]
