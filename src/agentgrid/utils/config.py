@@ -35,7 +35,10 @@ def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]
                 continue
             key, _, value = line.partition("=")
             key = key.strip()
-            value = value.strip().strip('"').strip("'")
+            value = value.strip()
+            if " #" in value:
+                value = value.split(" #", 1)[0]
+            value = value.strip('"').strip("'")
             if key not in os.environ:
                 config[key] = value
 
