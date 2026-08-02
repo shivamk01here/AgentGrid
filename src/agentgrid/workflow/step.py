@@ -30,8 +30,6 @@ class StepResult:
         return cls(step_name=name, success=False, error=error, duration_ms=duration_ms)
 
 
-@dataclass
-class Step:
     """A single step in a workflow."""
 
     name: str
@@ -40,6 +38,10 @@ class Step:
     retry_count: int = 0
     timeout_seconds: float | None = None
     dependencies: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.retry_count < 0:
+            raise ValueError("retry_count must be non-negative")
 
     async def execute(self, context: dict[str, Any]) -> StepResult:
         """Execute this step with the given context.
