@@ -106,10 +106,12 @@ class MemoryEngine:
         return await self._backend.delete(key)
 
     async def search(self, *, tag: str | None = None, prefix: str = "") -> list[MemoryEntry]:
-        """Search memory entries by tag or key prefix."""
+        """Search memory entries by tag or key prefix within this namespace."""
         all_entries = await self._backend.list_all()
         results = []
         for entry in all_entries:
+            if entry.namespace != self.namespace:
+                continue
             if tag and tag not in entry.tags:
                 continue
             if prefix and not entry.key.startswith(prefix):
@@ -119,7 +121,8 @@ class MemoryEngine:
 
     async def list_all(self) -> list[MemoryEntry]:
         """Return all non-expired entries in this namespace."""
-        return await self._backend.list_all()
+        entries = await self._backend.list_all()
+        return [e for e in entries if e.namespace == self.namespace]
 
     async def clear(self) -> int:
         """Clear all entries in this namespace. Returns count removed."""

@@ -131,3 +131,16 @@ class TestMemoryEngine:
         assert await engine.retrieve("k1") == "v1"
         entries = await engine.list_all()
         assert len(entries) == 1
+
+    @pytest.mark.asyncio
+    async def test_search_filters_by_namespace(self):
+        from agentgrid.memory.engine import InMemoryBackend
+
+        backend = InMemoryBackend()
+        engine_a = MemoryEngine(namespace="a", backend=backend)
+        engine_b = MemoryEngine(namespace="b", backend=backend)
+        await engine_a.store("key", "value_a")
+        await engine_b.store("key", "value_b")
+        results = await engine_a.search()
+        assert len(results) == 1
+        assert results[0].value == "value_a"
