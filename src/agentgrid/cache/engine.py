@@ -108,15 +108,24 @@ class CacheEngine:
         return await self._backend.clear()
 
     async def search(self, *, tag: str | None = None, prefix: str = "") -> list[CacheEntry]:
-        """Search cache entries by tag or key prefix."""
+        """Search cache entries by tag or key prefix within this namespace."""
         all_entries = await self._backend.list_all()
         results = []
         for entry in all_entries:
+            if not entry.key.startswith(f"{self.namespace}:"):
+                continue
+            raw_key = entry.key[len(self.namespace) + 1:]
             if tag and tag not in entry.tags:
                 continue
-            if prefix and not entry.key.startswith(prefix):
+            if prefix and not raw_key.startswith(prefix):
                 continue
-            results.append(entry)
+            results.append(CacheEntry(
+                key=raw_key,
+                value=entry.value,
+                ttl=entry.ttl,
+                tags=entry.tags,
+                created_at=entry.created_at,
+            ))
         return results
 
     async def invalidate(self, *, tag: str | None = None, prefix: str = "") -> int:

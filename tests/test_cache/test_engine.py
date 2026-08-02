@@ -77,6 +77,20 @@ class TestCacheEngine:
         assert len(results) == 2
 
     @pytest.mark.asyncio
+    async def test_search_isolation_across_namespaces(self):
+        backend = InMemoryCache()
+        engine_a = CacheEngine(namespace="a", backend=backend)
+        engine_b = CacheEngine(namespace="b", backend=backend)
+        await engine_a.set("key", "value_a")
+        await engine_b.set("key", "value_b")
+        results_a = await engine_a.search()
+        results_b = await engine_b.search()
+        assert len(results_a) == 1
+        assert len(results_b) == 1
+        assert results_a[0].value == "value_a"
+        assert results_b[0].value == "value_b"
+
+    @pytest.mark.asyncio
     async def test_invalidate_by_tag(self):
         engine = CacheEngine(namespace="test")
         await engine.set("k1", "v1", tags=["temporary"])
