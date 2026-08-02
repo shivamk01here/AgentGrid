@@ -87,10 +87,10 @@ class AgentRuntime:
         await self._emit("agent.run.started", {"input": input_data})
 
         last_error: str | None = None
-        start_time = time.monotonic()
 
         for attempt in range(1, self.max_retries + 1):
             self._iteration += 1
+            attempt_start = time.monotonic()
             try:
                 if self.timeout_seconds is not None:
                     output = await asyncio.wait_for(
@@ -99,7 +99,7 @@ class AgentRuntime:
                 else:
                     output = await self.agent.run(input_data)
 
-                duration = time.monotonic() - start_time
+                duration = time.monotonic() - attempt_start
                 logger.info(
                     "Runtime completed agent=%s iterations=%d",
                     self.agent.name,
@@ -138,7 +138,7 @@ class AgentRuntime:
                     last_error,
                 )
 
-        duration = time.monotonic() - start_time
+        duration = time.monotonic() - attempt_start
         await self._emit("agent.run.failed", {
             "error": last_error,
             "iterations": self._iteration,
