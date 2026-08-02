@@ -191,3 +191,12 @@ class TestInMemoryCache:
         assert cache.size == 0
         await cache.set("k", CacheEntry(key="k", value="v"))
         assert cache.size == 1
+
+    @pytest.mark.asyncio
+    async def test_expired_entries_purged_on_list_all(self):
+        cache = InMemoryCache()
+        await cache.set("alive", CacheEntry(key="alive", value="yes"))
+        await cache.set("dead", CacheEntry(key="dead", value="no", ttl=0))
+        entries = await cache.list_all()
+        assert len(entries) == 1
+        assert cache.size == 1
