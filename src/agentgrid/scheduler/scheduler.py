@@ -86,7 +86,7 @@ class Scheduler:
 
     async def _loop(self) -> None:
         while self._running:
-            for task in self._tasks.values():
+            for task in list(self._tasks.values()):
                 if task.should_run:
                     task._last_run = time.time()
                     try:

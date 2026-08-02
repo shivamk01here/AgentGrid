@@ -117,3 +117,18 @@ class TestScheduler:
         await asyncio.sleep(0.5)
         await scheduler.stop()
         assert ran is True
+
+    @pytest.mark.asyncio
+    async def test_add_remove_during_loop_does_not_crash(self):
+        scheduler = Scheduler(tick_interval=0.05)
+
+        async def stable():
+            pass
+
+        scheduler.add_task(ScheduledTask(name="stable", handler=stable, interval_seconds=0.0))
+        await scheduler.start()
+        await asyncio.sleep(0.1)
+        scheduler.add_task(ScheduledTask(name="new", handler=stable, interval_seconds=0.0))
+        scheduler.remove_task("stable")
+        await asyncio.sleep(0.1)
+        await scheduler.stop()
