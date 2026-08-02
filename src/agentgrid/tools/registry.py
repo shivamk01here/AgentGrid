@@ -88,11 +88,17 @@ class ToolRegistry:
                         "object": dict,
                     }
                     expected = type_map.get(expected_type)
-                    if expected and not isinstance(value, expected):
-                        return (
-                            f"Parameter '{param_name}' expected type '{expected_type}' "
-                            f"but got '{type(value).__name__}'"
-                        )
+                    if expected:
+                        if isinstance(value, bool) and expected is not bool:
+                            return (
+                                f"Parameter '{param_name}' expected type '{expected_type}' "
+                                f"but got 'boolean'"
+                            )
+                        if not isinstance(value, expected):
+                            return (
+                                f"Parameter '{param_name}' expected type '{expected_type}' "
+                                f"but got '{type(value).__name__}'"
+                            )
 
         return None
 

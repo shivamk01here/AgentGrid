@@ -101,6 +101,13 @@ class TestToolRegistry:
         assert result.success is False
         assert "expected type 'string'" in result.error
 
+    @pytest.mark.asyncio
+    async def test_validation_rejects_bool_for_integer(self, tool_registry):
+        tool_registry.register(SchemaTool())
+        result = await tool_registry.invoke("schema_tool", message="hi", count=True)
+        assert result.success is False
+        assert "expected type 'integer'" in result.error
+
 
 class SchemaTool(BaseTool):
     @property
