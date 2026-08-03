@@ -86,6 +86,12 @@ class TestMemoryEngine:
         assert await engine.retrieve("gone") is None
 
     @pytest.mark.asyncio
+    async def test_negative_ttl_raises(self):
+        engine = MemoryEngine(namespace="test")
+        with pytest.raises(ValueError, match="ttl_seconds"):
+            await engine.store("k", "v", ttl_seconds=-1)
+
+    @pytest.mark.asyncio
     async def test_expired_entries_purged_from_backend(self):
         engine = MemoryEngine(namespace="test")
         await engine.store("alive", "yes")

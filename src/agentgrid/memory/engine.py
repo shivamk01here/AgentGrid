@@ -79,6 +79,8 @@ class MemoryEngine:
             ttl_seconds: Optional time-to-live. None means permanent.
             tags: Optional tags for filtering.
         """
+        if ttl_seconds is not None and ttl_seconds < 0:
+            raise ValueError("ttl_seconds must be non-negative")
         entry = MemoryEntry(
             key=key,
             value=value,
