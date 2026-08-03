@@ -54,7 +54,11 @@ class ToolRegistry:
             return ToolResult.fail(validation_error)
 
         logger.info("Invoking tool: %s", name)
-        return await tool.execute(**kwargs)
+        try:
+            return await tool.execute(**kwargs)
+        except Exception as exc:
+            logger.exception("Tool '%s' raised an exception", name)
+            return ToolResult.fail(f"Tool '{name}' raised: {exc}")
 
     @staticmethod
     def _validate_params(tool: BaseTool, kwargs: dict[str, Any]) -> str | None:

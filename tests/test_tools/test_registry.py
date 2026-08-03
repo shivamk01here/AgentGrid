@@ -61,6 +61,13 @@ class TestToolRegistry:
         assert result.output == "hello"
 
     @pytest.mark.asyncio
+    async def test_invoke_tool_catches_exceptions(self, tool_registry):
+        tool_registry.register(FailTool())
+        result = await tool_registry.invoke("fail")
+        assert result.success is False
+        assert "raised" in result.error
+
+    @pytest.mark.asyncio
     async def test_invoke_unknown_tool(self, tool_registry):
         result = await tool_registry.invoke("nonexistent")
         assert result.success is False
