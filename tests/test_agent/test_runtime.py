@@ -107,6 +107,18 @@ class TestAgentRuntime:
         result = await runtime.execute("hello")
         assert result["success"] is True
 
+    @pytest.mark.asyncio
+    async def test_rate_limited_result_has_duration(self):
+        agent = DummyAgent()
+        from agentgrid.ratelimit.limiter import RateLimiter, RateLimitConfig
+        cfg = RateLimitConfig(max_requests=1, window_seconds=60, burst=1)
+        limiter = RateLimiter(cfg)
+        runtime = AgentRuntime(agent, rate_limiter=limiter)
+        result = await runtime.execute("hello")
+        assert result["success"] is False
+        assert "duration" in result
+        assert result["duration"] == 0
+
 
 class TestRuntimeConfig:
     def test_from_env_defaults(self):

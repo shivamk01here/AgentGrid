@@ -77,6 +77,7 @@ class AgentRuntime:
                     "success": False,
                     "error": f"Rate limit exceeded (retry after {rl_result.retry_after:.2f}s)",
                     "attempt": 0,
+                    "duration": 0,
                 }
 
         logger.info(
