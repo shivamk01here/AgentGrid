@@ -35,6 +35,12 @@ class TestAgent:
         assert "test-agent" in r
         assert agent.id in r
 
+    def test_temperature_range(self):
+        with pytest.raises(ValueError, match="temperature"):
+            AgentConfig(temperature=-0.1)
+        with pytest.raises(ValueError, match="temperature"):
+            AgentConfig(temperature=2.1)
+
     @pytest.mark.asyncio
     async def test_agent_run_not_implemented(self):
         agent = Agent()

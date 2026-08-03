@@ -18,6 +18,10 @@ class AgentConfig:
     temperature: float = 0.7
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if not (0.0 <= self.temperature <= 2.0):
+            raise ValueError("temperature must be between 0.0 and 2.0")
+
 
 class Agent:
     """Base agent class.
