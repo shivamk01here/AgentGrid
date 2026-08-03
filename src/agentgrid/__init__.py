@@ -13,6 +13,8 @@ from agentgrid.scheduler.scheduler import Scheduler, ScheduledTask
 from agentgrid.workflow.engine import WorkflowEngine
 from agentgrid.workflow.step import Step, StepResult
 from agentgrid.cache import CacheBackend, CacheEngine, CacheEntry, InMemoryCache
+from agentgrid.observability import MetricsCollector, get_logger
+from agentgrid.auth import Authenticator, Permission, PermissionLevel
 from agentgrid.ratelimit import (
     RateLimitConfig,
     RateLimiter,
@@ -45,6 +47,11 @@ __all__ = [
     "InMemoryCache",
     "CacheBackend",
     "CacheEntry",
+    "MetricsCollector",
+    "get_logger",
+    "Authenticator",
+    "Permission",
+    "PermissionLevel",
     "RateLimitConfig",
     "RateLimiter",
     "RateLimitResult",
