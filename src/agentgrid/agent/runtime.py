@@ -52,7 +52,7 @@ class AgentRuntime:
             from agentgrid.events.bus import Event
             await bus.emit(Event(topic=topic, payload=payload, source=self.agent.id))
         except Exception:
-            logger.debug("Failed to emit event topic=%s", topic)
+            logger.exception("Failed to emit event topic=%s", topic)
 
     async def execute(self, input_data: str = "") -> dict[str, Any]:
         """Run the agent with full lifecycle management.
