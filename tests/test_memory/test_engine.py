@@ -49,6 +49,20 @@ class TestMemoryEngine:
         assert memory_engine.size == 0
 
     @pytest.mark.asyncio
+    async def test_clear_only_clears_own_namespace(self):
+        from agentgrid.memory.engine import InMemoryBackend
+
+        backend = InMemoryBackend()
+        engine_a = MemoryEngine(namespace="a", backend=backend)
+        engine_b = MemoryEngine(namespace="b", backend=backend)
+        await engine_a.store("k1", "v1")
+        await engine_b.store("k2", "v2")
+        count = await engine_a.clear()
+        assert count == 1
+        assert await engine_a.retrieve("k1") is None
+        assert await engine_b.retrieve("k2") == "v2"
+
+    @pytest.mark.asyncio
     async def test_namespace_isolation(self):
         engine_a = MemoryEngine(namespace="a")
         engine_b = MemoryEngine(namespace="b")

@@ -128,7 +128,14 @@ class MemoryEngine:
 
     async def clear(self) -> int:
         """Clear all entries in this namespace. Returns count removed."""
-        return await self._backend.clear()
+        entries = await self._backend.list_all()
+        count = 0
+        for entry in entries:
+            if entry.namespace != self.namespace:
+                continue
+            if await self._backend.delete(entry.key):
+                count += 1
+        return count
 
     @property
     def size(self) -> int:
