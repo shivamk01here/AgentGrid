@@ -62,6 +62,11 @@ class TestAgentRuntime:
         runtime.reset()
         assert runtime._iteration == 0
 
+    def test_invalid_max_retries(self):
+        agent = DummyAgent()
+        with pytest.raises(ValueError, match="max_retries"):
+            AgentRuntime(agent, max_retries=0)
+
     @pytest.mark.asyncio
     async def test_iterations_are_per_execution(self):
         agent = DummyAgent()

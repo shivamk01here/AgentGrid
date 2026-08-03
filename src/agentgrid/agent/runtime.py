@@ -37,6 +37,8 @@ class AgentRuntime:
         rate_limit_key: str | None = None,
     ) -> None:
         self.agent = agent
+        if max_retries < 1:
+            raise ValueError("max_retries must be at least 1")
         self.max_retries = max_retries
         self.timeout_seconds = timeout_seconds
         self._rate_limiter = rate_limiter
@@ -89,6 +91,7 @@ class AgentRuntime:
         await self._emit("agent.run.started", {"input": input_data})
 
         last_error: str | None = None
+        attempt_start = time.monotonic()
 
         for attempt in range(1, self.max_retries + 1):
             self._iteration += 1
