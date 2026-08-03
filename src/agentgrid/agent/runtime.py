@@ -84,6 +84,7 @@ class AgentRuntime:
             self.agent.name,
             self.agent.config.max_iterations,
         )
+        self._iteration = 0
         await self._emit("agent.run.started", {"input": input_data})
 
         last_error: str | None = None

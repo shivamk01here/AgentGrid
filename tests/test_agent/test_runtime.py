@@ -63,6 +63,15 @@ class TestAgentRuntime:
         assert runtime._iteration == 0
 
     @pytest.mark.asyncio
+    async def test_iterations_are_per_execution(self):
+        agent = DummyAgent()
+        runtime = AgentRuntime(agent, max_retries=3)
+        await runtime.execute("hello")
+        assert runtime._iteration == 1
+        await runtime.execute("hello again")
+        assert runtime._iteration == 1
+
+    @pytest.mark.asyncio
     async def test_emits_events_on_success(self):
         agent = DummyAgent()
         bus = EventBus()
