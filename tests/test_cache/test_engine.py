@@ -43,6 +43,18 @@ class TestCacheEngine:
         assert engine.size == 0
 
     @pytest.mark.asyncio
+    async def test_clear_only_clears_own_namespace(self):
+        backend = InMemoryCache()
+        engine_a = CacheEngine(namespace="a", backend=backend)
+        engine_b = CacheEngine(namespace="b", backend=backend)
+        await engine_a.set("k1", "v1")
+        await engine_b.set("k2", "v2")
+        count = await engine_a.clear()
+        assert count == 1
+        assert await engine_a.get("k1") is None
+        assert await engine_b.get("k2") == "v2"
+
+    @pytest.mark.asyncio
     async def test_ttl_expiration(self):
         engine = CacheEngine(namespace="test")
         await engine.set("short", "value", ttl=0)

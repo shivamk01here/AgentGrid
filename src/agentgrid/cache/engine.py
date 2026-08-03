@@ -88,14 +88,15 @@ class CacheEngine:
             ttl: Optional time-to-live in seconds. None means permanent.
             tags: Optional tags for filtering.
         """
+        prefixed = self._prefixed(key)
         entry = CacheEntry(
-            key=key,
+            key=prefixed,
             value=value,
             ttl=ttl,
             tags=tags or [],
             created_at=time.time(),
         )
-        await self._backend.set(self._prefixed(key), entry)
+        await self._backend.set(prefixed, entry)
         logger.debug("Cached key=%s namespace=%s", key, self.namespace)
         return entry
 
@@ -105,7 +106,14 @@ class CacheEngine:
 
     async def clear(self) -> int:
         """Clear all entries in this namespace. Returns count removed."""
-        return await self._backend.clear()
+        entries = await self._backend.list_all()
+        count = 0
+        for entry in entries:
+            if not entry.key.startswith(f"{self.namespace}:"):
+                continue
+            if await self._backend.delete(entry.key):
+                count += 1
+        return count
 
     async def search(self, *, tag: str | None = None, prefix: str = "") -> list[CacheEntry]:
         """Search cache entries by tag or key prefix within this namespace."""
