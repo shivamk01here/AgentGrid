@@ -1,7 +1,7 @@
 """Tests for observability metrics collector."""
 
 import pytest
-from agentgrid.observability.metrics import MetricsCollector, MetricPoint
+from ledgerloop.observability.metrics import MetricsCollector, MetricPoint
 
 
 class TestMetricPoint:

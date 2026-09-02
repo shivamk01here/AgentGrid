@@ -1,8 +1,8 @@
 """Tests for the tool registry."""
 
 import pytest
-from agentgrid.tools.base import BaseTool, ToolResult
-from agentgrid.tools.registry import ToolRegistry
+from ledgerloop.tools.base import BaseTool, ToolResult
+from ledgerloop.tools.registry import ToolRegistry
 
 
 class EchoTool(BaseTool):

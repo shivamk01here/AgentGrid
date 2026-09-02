@@ -1,11 +1,11 @@
 """Multi-agent example - agents using tools, memory, and events."""
 
 import asyncio
-from agentgrid import Agent, AgentConfig
-from agentgrid.tools.base import BaseTool, ToolResult
-from agentgrid.tools.registry import ToolRegistry
-from agentgrid.memory.engine import MemoryEngine
-from agentgrid.events.bus import Event, EventBus
+from ledgerloop import Agent, AgentConfig
+from ledgerloop.tools.base import BaseTool, ToolResult
+from ledgerloop.tools.registry import ToolRegistry
+from ledgerloop.memory.engine import MemoryEngine
+from ledgerloop.events.bus import Event, EventBus
 
 
 # --- Define tools ---

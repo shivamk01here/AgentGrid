@@ -1,8 +1,8 @@
 """Tests for auth and permissions."""
 
 import pytest
-from agentgrid.auth.auth import Authenticator, AgentIdentity
-from agentgrid.auth.permissions import Permission, PermissionLevel
+from ledgerloop.auth.auth import Authenticator, AgentIdentity
+from ledgerloop.auth.permissions import Permission, PermissionLevel
 
 
 class TestPermission:
@@ -31,7 +31,7 @@ class TestAuthenticator:
     def test_create_and_verify(self):
         auth = Authenticator()
         api_key = auth.create_identity("agent-1")
-        assert api_key.startswith("fg_")
+        assert api_key.startswith("ll_")
         identity = auth.verify(api_key)
         assert identity is not None
         assert identity.agent_id == "agent-1"

@@ -3,7 +3,7 @@
 import asyncio
 import time
 import pytest
-from agentgrid.scheduler.scheduler import Scheduler, ScheduledTask
+from ledgerloop.scheduler.scheduler import Scheduler, ScheduledTask
 
 
 async def noop_task():

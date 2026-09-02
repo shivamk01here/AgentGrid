@@ -1,7 +1,7 @@
 """Built-in tools example - using DateTimeTool, TextTransformTool, and CounterTool."""
 
 import asyncio
-from agentgrid import (
+from ledgerloop import (
     Agent,
     AgentConfig,
     AgentRuntime,
@@ -46,7 +46,7 @@ async def main():
     agent.attach_event_bus(bus)
 
     runtime = AgentRuntime(agent)
-    result = await runtime.execute("hello agentgrid")
+    result = await runtime.execute("hello ledgerloop")
     print(result["output"])
 
     history = bus.get_history()
