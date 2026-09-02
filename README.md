@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="logo1.png" alt="Ledgerloop" width="140" />
-
-# Ledgerloop
+<img src="logo1.png" alt="Ledgerloop" width="420" />
 
 ### The runtime for AI agents that move money.
 
