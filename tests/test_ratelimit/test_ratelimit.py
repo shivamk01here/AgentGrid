@@ -4,10 +4,10 @@ import asyncio
 
 import pytest
 
-from agentgrid.ratelimit.bucket import TokenBucket
-from agentgrid.ratelimit.config import RateLimitConfig
-from agentgrid.ratelimit.limiter import RateLimiter, RateLimitResult
-from agentgrid.ratelimit.middleware import RateLimitExceeded, RateLimitMiddleware
+from ledgerloop.ratelimit.bucket import TokenBucket
+from ledgerloop.ratelimit.config import RateLimitConfig
+from ledgerloop.ratelimit.limiter import RateLimiter, RateLimitResult
+from ledgerloop.ratelimit.middleware import RateLimitExceeded, RateLimitMiddleware
 
 
 # ── RateLimitConfig ──────────────────────────────────────────────

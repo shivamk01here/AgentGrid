@@ -1,8 +1,8 @@
 """Tests for the cache engine."""
 
 import pytest
-from agentgrid.cache.engine import CacheEngine, InMemoryCache
-from agentgrid.cache.entry import CacheEntry
+from ledgerloop.cache.engine import CacheEngine, InMemoryCache
+from ledgerloop.cache.entry import CacheEntry
 
 
 class TestCacheEngine:

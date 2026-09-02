@@ -1,9 +1,9 @@
 """Tests for the agent runtime."""
 
 import pytest
-from agentgrid.agent.base import Agent, AgentConfig
-from agentgrid.agent.runtime import AgentRuntime
-from agentgrid.events.bus import EventBus
+from ledgerloop.agent.base import Agent, AgentConfig
+from ledgerloop.agent.runtime import AgentRuntime
+from ledgerloop.events.bus import EventBus
 
 
 class DummyAgent(Agent):
@@ -115,7 +115,7 @@ class TestAgentRuntime:
     @pytest.mark.asyncio
     async def test_rate_limited_result_has_duration(self):
         agent = DummyAgent()
-        from agentgrid.ratelimit.limiter import RateLimiter, RateLimitConfig
+        from ledgerloop.ratelimit.limiter import RateLimiter, RateLimitConfig
         cfg = RateLimitConfig(max_requests=1, window_seconds=60, burst=1)
         limiter = RateLimiter(cfg)
         runtime = AgentRuntime(agent, rate_limiter=limiter)
@@ -127,7 +127,7 @@ class TestAgentRuntime:
 
 class TestRuntimeConfig:
     def test_from_env_defaults(self):
-        from agentgrid.agent.config import RuntimeConfig
+        from ledgerloop.agent.config import RuntimeConfig
         cfg = RuntimeConfig.from_env()
         assert cfg.log_level == "INFO"
         assert cfg.tracing_enabled is True
@@ -136,20 +136,20 @@ class TestRuntimeConfig:
 
     def test_from_env_parses_1_as_true(self):
         import os
-        os.environ["AGENTGRID_TRACING_ENABLED"] = "1"
+        os.environ["LEDGERLOOP_TRACING_ENABLED"] = "1"
         try:
-            from agentgrid.agent.config import RuntimeConfig
+            from ledgerloop.agent.config import RuntimeConfig
             cfg = RuntimeConfig.from_env()
             assert cfg.tracing_enabled is True
         finally:
-            del os.environ["AGENTGRID_TRACING_ENABLED"]
+            del os.environ["LEDGERLOOP_TRACING_ENABLED"]
 
     def test_from_env_parses_yes_as_true(self):
         import os
-        os.environ["AGENTGRID_AUTH_ENABLED"] = "yes"
+        os.environ["LEDGERLOOP_AUTH_ENABLED"] = "yes"
         try:
-            from agentgrid.agent.config import RuntimeConfig
+            from ledgerloop.agent.config import RuntimeConfig
             cfg = RuntimeConfig.from_env()
             assert cfg.auth_enabled is True
         finally:
-            del os.environ["AGENTGRID_AUTH_ENABLED"]
+            del os.environ["LEDGERLOOP_AUTH_ENABLED"]

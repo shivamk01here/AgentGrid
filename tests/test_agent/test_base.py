@@ -1,7 +1,7 @@
 """Tests for the agent module."""
 
 import pytest
-from agentgrid.agent.base import Agent, AgentConfig
+from ledgerloop.agent.base import Agent, AgentConfig
 
 
 class TestAgent:
@@ -35,14 +35,27 @@ class TestAgent:
         assert "test-agent" in r
         assert agent.id in r
 
-    def test_temperature_range(self):
-        with pytest.raises(ValueError, match="temperature"):
-            AgentConfig(temperature=-0.1)
-        with pytest.raises(ValueError, match="temperature"):
-            AgentConfig(temperature=2.1)
+    def test_effort_must_be_a_known_level(self):
+        with pytest.raises(ValueError, match="effort"):
+            AgentConfig(effort="turbo")
+
+    def test_effort_accepts_every_supported_level(self):
+        for level in ("low", "medium", "high", "xhigh", "max"):
+            assert AgentConfig(effort=level).effort == level
+
+    def test_max_iterations_must_be_positive(self):
+        with pytest.raises(ValueError, match="max_iterations"):
+            AgentConfig(max_iterations=0)
+
+    def test_max_tokens_must_be_positive(self):
+        with pytest.raises(ValueError, match="max_tokens"):
+            AgentConfig(max_tokens=0)
+
+    def test_default_model_is_the_current_claude_model(self):
+        assert AgentConfig().model == "claude-opus-5"
 
     @pytest.mark.asyncio
-    async def test_agent_run_not_implemented(self):
+    async def test_agent_run_without_provider_explains_itself(self):
         agent = Agent()
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(RuntimeError, match="no provider attached"):
             await agent.run("hello")
