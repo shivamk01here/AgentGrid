@@ -164,6 +164,8 @@ ledgerloop/
 │   ├── models.py       Frozen entities with validated transitions
 │   ├── errors.py       Failure hierarchy carrying retry semantics
 │   └── ports.py        Async protocols for every external dependency
+├── adapters/       Concrete ports: clocks, in-memory stores, approval gateway
+├── policy/         Risk classification and approval rules
 ├── agent/          The loop: config, execution, retries, lifecycle
 ├── llm/            Model boundary - provider protocol + Anthropic adapter
 ├── tools/          Tool contract, registry, built-ins
@@ -179,13 +181,25 @@ ledgerloop/
 
 ## Status
 
-**Pre-alpha, and honest about it.** The domain layer, agent loop, and Anthropic
-provider are implemented. Durable stores, the policy engine, the approval
-gateway, and the dispatchers are defined as ports in
-[`core/ports.py`](src/ledgerloop/core/ports.py) and not yet implemented — the
-interfaces are stable, the adapters are next.
+**Pre-alpha, and honest about it.**
 
-Do not point this at production money yet.
+| Component | State |
+|---|---|
+| Domain layer (`core/`) | Implemented |
+| Agent loop + Anthropic provider | Implemented |
+| Policy engine | Implemented — ordered rules, risk classification, hard ceiling |
+| Approval gateway | Implemented — role checks, separation of duties, fingerprint binding |
+| Idempotency, ledger, run, step stores | Implemented **in memory only** |
+| Durable (Postgres) adapters | Not started |
+| Action dispatchers (PSP, bank) | Not started — port defined, no implementation |
+| Dashboard | Not started |
+
+The in-memory adapters are correct, not durable: they enforce the same
+atomicity, isolation, and concurrency guarantees a database must, so a
+Postgres adapter has a reference to agree with. They do not survive a restart.
+
+Nothing here has executed against a real payment provider.
+**Do not point this at production money yet.**
 
 ## Development
 
