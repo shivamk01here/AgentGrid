@@ -413,6 +413,7 @@ class Step:
 
     id: StepId
     run_id: RunId
+    tenant_id: TenantId
     index: int
     outcome: StepOutcome
     started_at: datetime
