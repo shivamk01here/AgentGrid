@@ -1,7 +1,7 @@
 """Tests for the event bus."""
 
 import pytest
-from agentgrid.events.bus import Event, EventBus
+from ledgerloop.events.bus import Event, EventBus
 
 
 class TestEventBus:

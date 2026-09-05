@@ -1,23 +1,23 @@
-# Getting Started with AgentGrid
+# Getting Started with Ledgerloop
 
 ## Installation
 
 ```bash
-pip install agentgrid
+pip install ledgerloop
 ```
 
 For optional dependencies:
 
 ```bash
-pip install agentgrid[all]    # Everything
-pip install agentgrid[memory] # SQLite memory backend
-pip install agentgrid[http]   # HTTP client for tool integrations
+pip install ledgerloop[all]    # Everything
+pip install ledgerloop[memory] # SQLite memory backend
+pip install ledgerloop[http]   # HTTP client for tool integrations
 ```
 
 ## Quick Start
 
 ```python
-from agentgrid import Agent, AgentConfig
+from ledgerloop import Agent, AgentConfig
 
 class MyAgent(Agent):
     async def run(self, input_data: str = "") -> str:
@@ -31,8 +31,8 @@ print(result)
 ## Adding Tools
 
 ```python
-from agentgrid.tools.base import BaseTool, ToolResult
-from agentgrid.tools.registry import ToolRegistry
+from ledgerloop.tools.base import BaseTool, ToolResult
+from ledgerloop.tools.registry import ToolRegistry
 
 class SearchTool(BaseTool):
     @property
@@ -55,7 +55,7 @@ registry.register(SearchTool())
 ## Using Memory
 
 ```python
-from agentgrid.memory.engine import MemoryEngine
+from ledgerloop.memory.engine import MemoryEngine
 
 memory = MemoryEngine(namespace="my-agent")
 
@@ -66,7 +66,7 @@ prefs = await memory.retrieve("user preferences")
 ## Event Bus
 
 ```python
-from agentgrid.events.bus import Event, EventBus
+from ledgerloop.events.bus import Event, EventBus
 
 bus = EventBus()
 

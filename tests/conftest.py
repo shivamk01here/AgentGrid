@@ -1,12 +1,12 @@
-"""Shared test fixtures for agentgrid."""
+"""Shared test fixtures for ledgerloop."""
 
 import pytest
 
-from agentgrid.agent.base import Agent, AgentConfig
-from agentgrid.tools.registry import ToolRegistry
-from agentgrid.memory.engine import MemoryEngine
-from agentgrid.events.bus import EventBus
-from agentgrid.observability.metrics import MetricsCollector
+from ledgerloop.agent.base import Agent, AgentConfig
+from ledgerloop.tools.registry import ToolRegistry
+from ledgerloop.memory.engine import MemoryEngine
+from ledgerloop.events.bus import EventBus
+from ledgerloop.observability.metrics import MetricsCollector
 
 
 @pytest.fixture

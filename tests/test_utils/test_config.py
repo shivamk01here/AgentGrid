@@ -4,7 +4,7 @@ import os
 import tempfile
 
 import pytest
-from agentgrid.utils.config import load_config
+from ledgerloop.utils.config import load_config
 
 
 class TestLoadConfig:

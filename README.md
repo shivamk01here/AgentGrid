@@ -1,82 +1,215 @@
-# AgentGrid
+<div align="center">
 
-> Open infrastructure for production AI agents.
+<img src="logo1.png" alt="Ledgerloop" width="420" />
 
----
+### The runtime for AI agents that move money.
 
-## What is AgentGrid?
+Agents are good at the judgment work buried in payment operations. They are
+catastrophic at it without idempotency, an audit trail, and a human in the loop.
+Ledgerloop is the layer that makes the difference.
 
-A modular Python framework for building, running, and observing AI agents in production. Not another wrapper. A foundation.
+[![CI](https://github.com/shivamk01here/AgentGrid/actions/workflows/ci.yml/badge.svg)](https://github.com/shivamk01here/AgentGrid/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Typed](https://img.shields.io/badge/mypy-strict-blue)](https://mypy-lang.org/)
 
----
-
-## Features
-
-- **Agent Runtime** - Execute agents with retries, timeouts, and lifecycle management
-- **Tool Registry** - Register, discover, and invoke tools with a clean abstraction
-- **Memory Engine** - Durable agent memory with TTL, namespacing, and search
-- **Event Bus** - Async pub/sub for inter-agent communication and observability
-- **Workflow Engine** - Multi-step workflows with dependency resolution
-- **Scheduler** - Periodic and delayed task execution
-- **Observability** - Structured logging and metrics out of the box
-- **Auth** - API key authentication and permission controls
+</div>
 
 ---
 
-## Quick Start
+## The problem
+
+Payments mostly work. The cost lives in the 1–5% that doesn't.
+
+A settlement file that won't tie out. A chargeback with a seven-day deadline. A
+payout that failed with a bank narration nobody can parse. A refund that needs a
+policy check and a signature. This work is high-volume, semi-structured, and
+requires reading messy human artifacts — which is exactly what deterministic code
+is bad at and language models are good at.
+
+So why isn't every payments team running agents already? Because the moment an
+agent touches money, a general-purpose agent framework becomes a liability:
+
+| What generic frameworks do | What that costs you |
+|---|---|
+| Retry a failed call blindly | You pay twice |
+| Keep a conversation in memory | The process dies, the run is gone |
+| Log free text | An auditor asks why ₹2,00,000 moved, and you have a chat transcript |
+| Execute whatever the model decides | No threshold, no approval, no ceiling |
+| Timeout and move on | The effect may have landed. Nobody knows |
+
+Ledgerloop exists for the last column.
+
+## What it is
+
+A Python runtime for agents whose actions have financial consequences. The agent
+loop is the small part. The guarantees around it are the product.
+
+**Exactly-once effects.** Every value-moving action is claimed against an
+idempotency store *before* dispatch and settled after. A key is derived from the
+action's content, so the same logical effect proposed twice collides on the
+second attempt. A crash between claim and settle produces an `IN_FLIGHT` record
+that must be reconciled — never blindly retried.
+
+**A hash-chained audit ledger.** Every model turn, tool call, argument, policy
+decision, and approval is appended to a per-run chain, each entry carrying the
+digest of its predecessor. Alter a historical record and every entry after it
+fails verification. This is evidence, not logging.
+
+**Approval gates that actually gate.** Policy classifies each proposed action by
+risk tier and returns `ALLOW`, `REQUIRE_APPROVAL`, or `DENY`. A gated run halts,
+persists, and resumes days later on a reviewer's decision. Approvals bind to the
+action's *fingerprint* — approving a ₹5,000 refund can never authorize a
+₹5,00,000 one.
+
+**Durable, resumable runs.** Runs are persisted aggregates with explicit state
+transitions and optimistic concurrency. Crash at step 7, resume at step 7. Steps
+already committed are never re-executed.
+
+**Money that behaves like money.** Integer minor units and an ISO currency, with
+no constructor that accepts a float, no arithmetic across currencies, and an
+`allocate` that conserves every last paisa when splitting.
+
+## Design principles
+
+1. **Illegal states are unrepresentable.** Frozen entities, validated
+   transitions, closed enums. A `Run` cannot be in a state it never legally
+   reached.
+2. **Classification drives behavior, not string matching.** Every failure
+   carries a `FailureClass`. `TRANSIENT` retries. `INDETERMINATE` never does.
+3. **The core does no I/O.** `ledgerloop.core` depends on the standard library
+   and nothing else. Postgres, Redis, PSPs, and model APIs satisfy ports.
+4. **Time is injected.** Nothing calls `datetime.now()`. Runs replay exactly.
+5. **Async at every boundary.** No sync escape hatches — one blocking call
+   stalls every run on the worker.
+6. **Tenancy at the port boundary.** Every stored read takes a `TenantId`;
+   isolation is not left to a caller's discipline.
+
+## Install
 
 ```bash
-pip install agentgrid
+pip install "ledgerloop[anthropic]"
 ```
+
+## A first agent
 
 ```python
-from agentgrid import Agent, AgentConfig
+import asyncio
 
-class MyAgent(Agent):
-    async def run(self, input_data: str = "") -> str:
-        return f"Hello from {self.name}!"
+from ledgerloop import Agent, AgentConfig, AnthropicProvider
+from ledgerloop.tools.builtins import DateTimeTool
 
-agent = MyAgent(AgentConfig(name="my-agent"))
-result = await agent.run("start")
+
+async def main() -> None:
+    agent = Agent(
+        AgentConfig(
+            name="settlement-analyst",
+            system_prompt="You reconcile settlement files. Cite every figure.",
+            effort="high",
+        )
+    )
+    agent.attach_provider(AnthropicProvider())
+    agent.attach_tool(DateTimeTool())
+
+    result = await agent.run_loop("Which settlement batches are still open?")
+
+    print(result.output)
+    for invocation in result.invocations:
+        print(f"  {invocation.name}({invocation.arguments}) -> {invocation.success}")
+
+
+asyncio.run(main())
 ```
 
----
+`run_loop` returns the full step ledger — every turn, its reasoning summary, its
+tool calls, and its token spend. `run()` returns just the final text when that's
+all you need.
 
-## Project Structure
+## Modelling an action
+
+Actions are proposals. Constructing one is always safe; only dispatch has
+consequences.
+
+```python
+from ledgerloop.core import (
+    Action, ActionId, ActionKind, Currency, IdempotencyKey, Money,
+)
+
+amount = Money.from_major("4310.50", Currency.INR)
+
+refund = Action(
+    id=ActionId.generate(),
+    kind=ActionKind.REFUND,
+    description="Duplicate charge on order #88213",
+    amount=amount,
+    counterparty="mer_9f21c",
+    # Derived, never random - the same effect must compute the same key.
+    idempotency_key=IdempotencyKey.derive(
+        "refund", "ord_88213", str(amount.minor_units), amount.currency
+    ),
+)
+```
+
+Omit the idempotency key on a value-moving action and construction fails. That
+is the point.
+
+## Architecture
 
 ```
-src/agentgrid/
-├── agent/          # Core agent abstractions
-├── tools/          # Tool registry and base classes
-├── memory/         # Durable memory engine
-├── events/         # Async event bus
-├── workflow/       # Workflow orchestration
-├── scheduler/      # Task scheduling
-├── observability/  # Logging and metrics
-├── auth/           # Authentication and permissions
-└── utils/          # Configuration helpers
+ledgerloop/
+├── core/           Domain: enums, ids, money, models, errors, ports. No I/O.
+│   ├── enums.py        Closed vocabularies - the wire format
+│   ├── ids.py          Typed, prefixed identifiers
+│   ├── money.py        Integer-minor-unit monetary arithmetic
+│   ├── models.py       Frozen entities with validated transitions
+│   ├── errors.py       Failure hierarchy carrying retry semantics
+│   └── ports.py        Async protocols for every external dependency
+├── adapters/       Concrete ports: clocks, in-memory stores, approval gateway
+├── policy/         Risk classification and approval rules
+├── agent/          The loop: config, execution, retries, lifecycle
+├── llm/            Model boundary - provider protocol + Anthropic adapter
+├── tools/          Tool contract, registry, built-ins
+├── memory/         Namespaced agent memory with TTL
+├── cache/          Namespaced caching
+├── events/         Async pub/sub
+├── workflow/       Multi-step workflows with dependency resolution
+├── scheduler/      Periodic and delayed execution
+├── ratelimit/      Token-bucket limiting
+├── auth/           API-key identity and permissions
+└── observability/  Structured logging and metrics
 ```
 
----
+## Status
+
+**Pre-alpha, and honest about it.**
+
+| Component | State |
+|---|---|
+| Domain layer (`core/`) | Implemented |
+| Agent loop + Anthropic provider | Implemented |
+| Policy engine | Implemented — ordered rules, risk classification, hard ceiling |
+| Approval gateway | Implemented — role checks, separation of duties, fingerprint binding |
+| Idempotency, ledger, run, step stores | Implemented **in memory only** |
+| Durable (Postgres) adapters | Not started |
+| Action dispatchers (PSP, bank) | Not started — port defined, no implementation |
+| Dashboard | Not started |
+
+The in-memory adapters are correct, not durable: they enforce the same
+atomicity, isolation, and concurrency guarantees a database must, so a
+Postgres adapter has a reference to agree with. They do not survive a restart.
+
+Nothing here has executed against a real payment provider.
+**Do not point this at production money yet.**
 
 ## Development
 
 ```bash
-# Install with dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Lint
+pip install -e ".[dev,anthropic]"
 ruff check src/ tests/
-
-# Type check
-mypy src/agentgrid/
+mypy src/ledgerloop/
+pytest
 ```
-
----
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

@@ -1,8 +1,8 @@
 """Tests for the memory engine."""
 
 import pytest
-from agentgrid.memory.engine import MemoryEngine
-from agentgrid.memory.store import MemoryEntry
+from ledgerloop.memory.engine import MemoryEngine
+from ledgerloop.memory.store import MemoryEntry
 
 
 class TestMemoryEngine:
@@ -34,7 +34,7 @@ class TestMemoryEngine:
 
     @pytest.mark.asyncio
     async def test_search_by_prefix(self, memory_engine):
-        await memory_engine.store("agent.name", "agentgrid")
+        await memory_engine.store("agent.name", "ledgerloop")
         await memory_engine.store("agent.version", "0.1")
         await memory_engine.store("system.os", "linux")
         results = await memory_engine.search(prefix="agent.")
@@ -50,7 +50,7 @@ class TestMemoryEngine:
 
     @pytest.mark.asyncio
     async def test_clear_only_clears_own_namespace(self):
-        from agentgrid.memory.engine import InMemoryBackend
+        from ledgerloop.memory.engine import InMemoryBackend
 
         backend = InMemoryBackend()
         engine_a = MemoryEngine(namespace="a", backend=backend)
@@ -154,7 +154,7 @@ class TestMemoryEngine:
 
     @pytest.mark.asyncio
     async def test_search_filters_by_namespace(self):
-        from agentgrid.memory.engine import InMemoryBackend
+        from ledgerloop.memory.engine import InMemoryBackend
 
         backend = InMemoryBackend()
         engine_a = MemoryEngine(namespace="a", backend=backend)

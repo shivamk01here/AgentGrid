@@ -1,7 +1,7 @@
-"""Basic agent example - the simplest possible AgentGrid agent."""
+"""Basic agent example - the simplest possible Ledgerloop agent."""
 
 import asyncio
-from agentgrid import Agent, AgentConfig
+from ledgerloop import Agent, AgentConfig
 
 
 class SimpleAgent(Agent):
@@ -13,7 +13,7 @@ class SimpleAgent(Agent):
 
 async def main():
     agent = SimpleAgent(AgentConfig(name="greeter"))
-    result = await agent.run("Hello AgentGrid!")
+    result = await agent.run("Hello Ledgerloop!")
     print(result)
 
 
