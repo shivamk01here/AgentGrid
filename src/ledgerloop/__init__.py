@@ -8,6 +8,7 @@ from ledgerloop.adapters.memory import (
     InMemoryLedgerStore,
     InMemoryRunStore,
     InMemoryStepStore,
+    RecordingDispatcher,
 )
 from ledgerloop.agent.base import Agent, AgentConfig
 from ledgerloop.agent.loop import AgentLoop, LoopResult, LoopStep, ToolInvocation
@@ -22,6 +23,15 @@ from ledgerloop.llm import (
     ToolCall,
 )
 from ledgerloop.policy import PolicyRule, ThresholdPolicy, ThresholdPolicyEngine
+from ledgerloop.runtime import (
+    ActionExecutor,
+    ActionResult,
+    ExecutionOutcome,
+    ProviderLookup,
+    ReconciliationReport,
+    Reconciler,
+    RunCoordinator,
+)
 from ledgerloop.tools.base import BaseTool, ToolResult
 from ledgerloop.tools.registry import ToolRegistry
 from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool
@@ -88,5 +98,13 @@ __all__ = [
     "RateLimitResult",
     "RateLimitMiddleware",
     "RateLimitExceeded",
+    "RecordingDispatcher",
+    "ActionExecutor",
+    "ActionResult",
+    "ExecutionOutcome",
+    "ProviderLookup",
+    "ReconciliationReport",
+    "Reconciler",
+    "RunCoordinator",
 ]
 __version__ = "0.1.0"

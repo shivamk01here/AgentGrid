@@ -153,6 +153,34 @@ refund = Action(
 Omit the idempotency key on a value-moving action and construction fails. That
 is the point.
 
+## A refund that stops for a human
+
+The coordinator puts every proposal through policy. Small ones go through;
+large ones park the run until somebody signs off, and pick up exactly where
+they stopped.
+
+```python
+result = await coordinator.propose(run, build_refund("ord_1001", "1200"))
+# -> executed immediately, below the review threshold
+
+halted = await coordinator.propose(result.run, build_refund("ord_2002", "84000"))
+# -> halted, run is AWAITING_APPROVAL, nothing reached the provider
+
+# ...a day later, once a reviewer has decided...
+await gateway.submit(tenant, halted.approval_id, approved=True, actor=approver, at=now)
+resumed = await coordinator.resume(halted.run, large)
+# -> executed exactly once, against the fingerprint that was approved
+```
+
+A grant covers one action fingerprint. Come back with a different amount and
+the resume is refused rather than riding on the old signature.
+
+Run it end to end, no database and no API key required:
+
+```bash
+python examples/gated_refund.py
+```
+
 ## Architecture
 
 ```
@@ -164,6 +192,7 @@ ledgerloop/
 │   ├── models.py       Frozen entities with validated transitions
 │   ├── errors.py       Failure hierarchy carrying retry semantics
 │   └── ports.py        Async protocols for every external dependency
+├── runtime/        Coordinator, executor, reconciler - the moving parts
 ├── adapters/       Concrete ports: clocks, in-memory stores, approval gateway
 ├── policy/         Risk classification and approval rules
 ├── agent/          The loop: config, execution, retries, lifecycle
@@ -189,9 +218,12 @@ ledgerloop/
 | Agent loop + Anthropic provider | Implemented |
 | Policy engine | Implemented — ordered rules, risk classification, hard ceiling |
 | Approval gateway | Implemented — role checks, separation of duties, fingerprint binding |
+| Run coordinator — propose → gate → halt → resume | Implemented |
+| Action executor — exactly-once dispatch | Implemented |
+| Reconciler for in-flight claims | Implemented |
 | Idempotency, ledger, run, step stores | Implemented **in memory only** |
 | Durable (Postgres) adapters | Not started |
-| Action dispatchers (PSP, bank) | Not started — port defined, no implementation |
+| Action dispatchers (PSP, bank) | Not started — port defined, fake for tests only |
 | Dashboard | Not started |
 
 The in-memory adapters are correct, not durable: they enforce the same
