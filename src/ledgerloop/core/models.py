@@ -237,6 +237,12 @@ class IdempotencyRecord:
     action_fingerprint: str
     state: IdempotencyState
     claimed_at: datetime
+    action_id: ActionId | None = None
+    """The action this claim was taken for. Lets a reconciler explain what it
+    resolved instead of only naming an opaque key."""
+    run_id: RunId | None = None
+    """The run the action belonged to, so a reconciled outcome lands in the
+    right audit chain."""
     settled_at: datetime | None = None
     receipt: ActionReceipt | None = None
 

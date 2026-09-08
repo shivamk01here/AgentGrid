@@ -227,6 +227,8 @@ class IdempotencyStore(Protocol):
         action_fingerprint: str,
         *,
         at: datetime,
+        action_id: ActionId | None = None,
+        run_id: RunId | None = None,
     ) -> IdempotencyRecord:
         """Atomically claim `key`, or return the existing claim.
 

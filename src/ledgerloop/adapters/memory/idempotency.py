@@ -18,7 +18,7 @@ from datetime import datetime
 
 from ledgerloop.core.enums import IdempotencyState
 from ledgerloop.core.errors import IdempotencyConflictError, StateTransitionError
-from ledgerloop.core.ids import IdempotencyKey, TenantId
+from ledgerloop.core.ids import ActionId, IdempotencyKey, RunId, TenantId
 from ledgerloop.core.models import ActionReceipt, IdempotencyRecord
 
 __all__ = ["InMemoryIdempotencyStore"]
@@ -44,6 +44,8 @@ class InMemoryIdempotencyStore:
         action_fingerprint: str,
         *,
         at: datetime,
+        action_id: ActionId | None = None,
+        run_id: RunId | None = None,
     ) -> IdempotencyRecord:
         """Atomically claim `key`, or return the claim that already exists.
 
@@ -76,6 +78,8 @@ class InMemoryIdempotencyStore:
                 action_fingerprint=action_fingerprint,
                 state=IdempotencyState.IN_FLIGHT,
                 claimed_at=at,
+                action_id=action_id,
+                run_id=run_id,
             )
             self._records[storage_key] = record
             return record

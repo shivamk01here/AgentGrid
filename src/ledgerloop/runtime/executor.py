@@ -104,7 +104,12 @@ class ActionExecutor:
 
         # 1. Claim. Durable before anything leaves the process.
         record = await self._idempotency.claim(
-            action.idempotency_key, tenant_id, fingerprint, at=self._clock.now()
+            action.idempotency_key,
+            tenant_id,
+            fingerprint,
+            at=self._clock.now(),
+            action_id=action.id,
+            run_id=run_id,
         )
 
         # 2. Already settled? Replay the original outcome. This is what makes
