@@ -274,6 +274,10 @@ class ApprovalRequest:
     approver_role: str
     state: ApprovalState
     requested_at: datetime
+    risk_tier: RiskTier = RiskTier.HIGH
+    """The tier policy assigned when this was raised. Shown to the reviewer,
+    and carried forward so a resumed run reports the risk it was approved at
+    rather than guessing."""
     expires_at: datetime | None = None
     decided_at: datetime | None = None
     decided_by: str | None = None

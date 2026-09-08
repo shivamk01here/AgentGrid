@@ -108,6 +108,7 @@ class InMemoryApprovalGateway:
             approver_role=decision.approver_role or "payments-approver",
             state=ApprovalState.PENDING,
             requested_at=at,
+            risk_tier=decision.risk_tier,
             expires_at=expires_at,
         )
 
