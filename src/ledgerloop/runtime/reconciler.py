@@ -137,10 +137,11 @@ class Reconciler:
         """Resolve one record.
 
         Returns:
-            True when the provider confirmed the effect, False when it never
-            saw it, and None when the lookup itself failed - in which case
-            the record stays in flight for the next sweep. Leaving it open is
-            correct: an unanswered question must not become an answer.
+            True when the provider confirmed the effect succeeded, False when
+            it never saw it or says it failed, and None when the lookup
+            itself failed - in which case the record stays in flight for the
+            next sweep. Leaving it open is correct: an unanswered question
+            must not become an answer.
         """
         try:
             receipt = await self._lookup.lookup(record.key, record.tenant_id)
@@ -161,8 +162,15 @@ class Reconciler:
             await self._settle(record, settled, LedgerEventType.ACTION_FAILED)
             return False
 
-        await self._settle(record, receipt, LedgerEventType.ACTION_SETTLED)
-        return True
+        if receipt.succeeded:
+            await self._settle(record, receipt, LedgerEventType.ACTION_SETTLED)
+            return True
+
+        # The provider found the request and told us it failed. That is still
+        # a resolution - the claim settles - but it is not a confirmation,
+        # and it must not be ledgered as one.
+        await self._settle(record, receipt, LedgerEventType.ACTION_FAILED)
+        return False
 
     async def _settle(
         self,

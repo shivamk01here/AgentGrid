@@ -10,7 +10,13 @@ from ledgerloop.adapters.memory import (
     InMemoryLedgerStore,
     RecordingDispatcher,
 )
-from ledgerloop.core.enums import ActionKind, Currency, FailureClass, IdempotencyState
+from ledgerloop.core.enums import (
+    ActionKind,
+    Currency,
+    FailureClass,
+    IdempotencyState,
+    LedgerEventType,
+)
 from ledgerloop.core.ids import ActionId, IdempotencyKey, RunId, TenantId
 from ledgerloop.core.models import Action, ActionReceipt
 from ledgerloop.core.money import Money
@@ -121,6 +127,34 @@ class TestSweep:
         assert result.not_found == 1
         record = await idempotency.get(action.idempotency_key, tenant)
         assert record.state is IdempotencyState.FAILED
+
+    async def test_a_provider_reported_failure_is_not_a_confirmation(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        lookup = StubLookup(
+            receipt=ActionReceipt(
+                action_id=action.id,
+                state=IdempotencyState.FAILED,
+                provider_reference="psp_real_2",
+                failure_reason="issuer declined",
+                settled_at=AT,
+            )
+        )
+        await clock.advance(timedelta(hours=1))
+
+        result = await _reconciler(idempotency, ledger, clock, lookup).sweep()
+
+        # The provider answered, so the claim resolves - but it resolves to
+        # "this did not happen", and the counts have to say so.
+        assert result.confirmed == 0
+        assert result.not_found == 1
+        assert result.resolved == 1
+        record = await idempotency.get(action.idempotency_key, tenant)
+        assert record.state is IdempotencyState.FAILED
+
+        entries = await ledger.read(tenant, run_id)
+        assert entries[-1].event_type is LedgerEventType.ACTION_FAILED
 
     async def test_a_failing_lookup_leaves_the_claim_open(
         self, idempotency, ledger, clock, tenant, run_id
