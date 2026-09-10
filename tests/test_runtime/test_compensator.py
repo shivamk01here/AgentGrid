@@ -23,7 +23,8 @@ from ledgerloop.core.enums import (
     IdempotencyState,
     RunState,
 )
-from ledgerloop.core.ids import ActionId, IdempotencyKey, TenantId
+from ledgerloop.core.errors import ProviderError, StateTransitionError
+from ledgerloop.core.ids import ActionId, ApprovalId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, ActionReceipt, RunSpec
 from ledgerloop.core.money import Money
 from ledgerloop.runtime import ActionExecutor
@@ -246,3 +247,161 @@ def _pretend_running(run):
     state.
     """
     return replace(run, state=RunState.RUNNING, ended_at=None, stop_reason=None)
+
+
+def payout(order: str, amount: str = "9000") -> Action:
+    """An effect with no reversal. Once it is gone, it is gone."""
+    money = Money.from_major(amount, Currency.INR)
+    return Action(
+        id=ActionId.generate(),
+        kind=ActionKind.PAYOUT,
+        description=f"Payout for {order}",
+        amount=money,
+        counterparty="acc_44",
+        idempotency_key=IdempotencyKey.derive("payout", order, str(money.minor_units)),
+    )
+
+
+class TestThingsItRefusesToDo:
+    async def test_an_irreversible_effect_is_reported_not_reversed(
+        self, compensator, executor, runs, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, payout("ord_9"))
+
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        assert report.standing == 1
+        assert report.irreversible == 1
+        assert not report.complete
+        assert dispatcher.compensated == []
+
+    async def test_an_indeterminate_effect_is_left_alone(
+        self, compensator, executor, runs, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        await apply(executor, run, capture("ord_1"))
+
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        # Nobody knows whether that capture landed. Refunding it might hand
+        # back money that was never taken.
+        assert report.unresolved == 1
+        assert report.compensated == 0
+        assert not report.complete
+        assert dispatcher.compensated == []
+
+    async def test_a_provider_refusing_the_reversal_is_not_success(
+        self, compensator, executor, runs, ledger, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+
+        compensator = _with_dispatcher(compensator, _RefusingDispatcher())
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        assert report.failed == 1
+        assert not report.complete
+        assert report.stranded == 1
+
+    async def test_an_effect_a_reversal_failed_on_is_still_standing(
+        self, compensator, executor, runs, ledger, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+
+        compensator = _with_dispatcher(compensator, _RefusingDispatcher())
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        # The failed reversal must not read back as a failed dispatch. If it
+        # did, the next pass would decide the capture never happened and stop
+        # trying to undo it - while the money sits with the provider.
+        effects = replay_effects(await ledger.read(tenant, run.id))
+        assert len(effects) == 1
+        assert effects[0].kind is ActionKind.CAPTURE
+
+
+class TestPartialRollback:
+    async def test_a_run_that_could_not_be_fully_rolled_back_fails(
+        self, compensator, executor, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        await apply(executor, run, payout("ord_9"))
+
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        assert report.compensated == 1
+        assert report.irreversible == 1
+        assert not report.complete
+
+        stored = await runs.get(tenant, run.id)
+        assert stored.state is RunState.FAILED
+        assert "still applied" in (stored.failure_reason or "")
+
+    async def test_the_reversible_ones_are_still_reversed(
+        self, compensator, executor, runs, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        reversible = capture("ord_1")
+        await apply(executor, run, reversible)
+        await apply(executor, run, payout("ord_9"))
+
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        # One bad effect does not excuse leaving the others out there.
+        assert [a.id for a in dispatcher.compensated] == [reversible.id]
+
+
+class TestGuards:
+    async def test_a_terminal_run_cannot_be_rolled_back(
+        self, compensator, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        run = await runs.save(run.succeed(at=clock.now()), expected_version=run.version)
+
+        with pytest.raises(StateTransitionError):
+            await compensator.compensate(run)
+
+    async def test_a_halted_run_cannot_be_rolled_back_until_it_resumes(
+        self, compensator, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        halted = await runs.save(
+            run.await_approval(ApprovalId.generate(), at=clock.now()),
+            expected_version=run.version,
+        )
+
+        with pytest.raises(StateTransitionError):
+            await compensator.compensate(halted)
+
+
+class _RefusingDispatcher(RecordingDispatcher):
+    """A provider that will not reverse anything.
+
+    Real ones do this: past the settlement window, or a scheme that simply
+    does not take reversals for that instrument.
+    """
+
+    async def compensate(self, action, receipt, *, at):
+        raise ProviderError(
+            "Reversal window has closed",
+            provider="recording",
+            failure_class=FailureClass.INVALID_REQUEST,
+        )
+
+
+def _with_dispatcher(compensator: Compensator, dispatcher) -> Compensator:
+    """The same compensator, pointed at a different provider.
+
+    Used to apply effects through a working dispatcher and then roll back
+    against one that refuses, which is the sequence that actually happens.
+    """
+    return Compensator(
+        runs=compensator._runs,
+        ledger=compensator._ledger,
+        dispatcher=dispatcher,
+        idempotency=compensator._idempotency,
+        clock=compensator._clock,
+    )
