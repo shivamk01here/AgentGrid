@@ -26,11 +26,15 @@ from ledgerloop.policy import PolicyRule, ThresholdPolicy, ThresholdPolicyEngine
 from ledgerloop.runtime import (
     ActionExecutor,
     ActionResult,
+    AppliedEffect,
+    CompensationReport,
+    Compensator,
     ExecutionOutcome,
     ProviderLookup,
     ReconciliationReport,
     Reconciler,
     RunCoordinator,
+    replay_effects,
 )
 from ledgerloop.tools.base import BaseTool, ToolResult
 from ledgerloop.tools.registry import ToolRegistry
@@ -101,10 +105,14 @@ __all__ = [
     "RecordingDispatcher",
     "ActionExecutor",
     "ActionResult",
+    "AppliedEffect",
+    "CompensationReport",
+    "Compensator",
     "ExecutionOutcome",
     "ProviderLookup",
     "ReconciliationReport",
     "Reconciler",
     "RunCoordinator",
+    "replay_effects",
 ]
 __version__ = "0.1.0"

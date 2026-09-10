@@ -17,6 +17,18 @@ class TestTopLevelExports:
         ]:
             assert hasattr(ledgerloop, name)
 
+    def test_runtime_symbols(self):
+        for name in [
+            "ActionExecutor",
+            "RunCoordinator",
+            "Reconciler",
+            "Compensator",
+            "CompensationReport",
+            "AppliedEffect",
+            "replay_effects",
+        ]:
+            assert hasattr(ledgerloop, name)
+
     def test_observability_symbols(self):
         assert hasattr(ledgerloop, "MetricsCollector")
         assert hasattr(ledgerloop, "get_logger")

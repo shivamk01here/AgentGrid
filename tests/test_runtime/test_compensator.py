@@ -27,8 +27,8 @@ from ledgerloop.core.errors import ProviderError, StateTransitionError
 from ledgerloop.core.ids import ActionId, ApprovalId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, ActionReceipt, RunSpec
 from ledgerloop.core.money import Money
-from ledgerloop.runtime import ActionExecutor
-from ledgerloop.runtime.compensator import Compensator, reversal_key
+from ledgerloop.runtime import ActionExecutor, Compensator
+from ledgerloop.runtime.compensator import reversal_key
 from ledgerloop.runtime.effects import replay_effects
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
