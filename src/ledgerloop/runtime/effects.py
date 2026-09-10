@@ -6,9 +6,15 @@ So this module reads the chain rather than any mutable table: dispatches
 pair up with their settlements, failures cancel out, and what is left
 standing is the set of effects still out there in the world.
 
-The one case that does not resolve is an effect the executor left
-indeterminate. It is neither applied nor not applied - nobody knows - and it
-is reported as exactly that. Reversing it would risk refunding a capture that
+An effect is unknown until something says otherwise. A dispatch on its own
+proves the request went out, not that it arrived, so effects start
+indeterminate and only a settlement clears them. That covers both the case
+the executor flags explicitly and the quieter one where the process died
+between writing the dispatch and settling the claim - the chain looks the
+same from the outside, and it should be treated the same.
+
+An indeterminate effect is neither applied nor not applied, and it is
+reported as exactly that. Reversing it would risk refunding a capture that
 never happened; dropping it would risk leaving one behind. Both are wrong, so
 the caller is told and a human decides.
 """
@@ -53,9 +59,12 @@ class AppliedEffect:
     idempotency_key: IdempotencyKey | None = None
     provider_reference: str | None = None
     settled_at: datetime | None = None
-    indeterminate: bool = False
+    indeterminate: bool = True
     """True when the dispatch never came back with an answer. Such an effect
-    must not be reversed and must not be forgotten."""
+    must not be reversed and must not be forgotten.
+
+    Defaults to True because that is what a bare dispatch means: the request
+    went out and nothing has come back yet. Only a settlement clears it."""
 
     @property
     def is_reversible(self) -> bool:
@@ -125,13 +134,12 @@ def replay_effects(entries: Sequence[LedgerEntry]) -> tuple[AppliedEffect, ...]:
                 # still applied - that is the whole problem.
                 continue
             if entry.payload.get("indeterminate") is True:
-                # The request left the process and never came back. Keep it,
-                # flagged - this is the one nobody may quietly resolve.
-                standing[action_id] = _replace_indeterminate(existing)
-            else:
-                # A definitive provider-side refusal. Nothing landed, so
-                # there is nothing to undo.
-                del standing[action_id]
+                # The request left the process and never came back. Keep it -
+                # it is already flagged, and nobody may quietly resolve it.
+                continue
+            # A definitive provider-side refusal. Nothing landed, so there is
+            # nothing to undo.
+            del standing[action_id]
 
         elif entry.event_type is LedgerEventType.ACTION_COMPENSATED:
             standing.pop(action_id, None)
@@ -171,11 +179,6 @@ def _settled(effect: AppliedEffect, entry: LedgerEntry) -> AppliedEffect:
         settled_at=entry.occurred_at,
         indeterminate=False,
     )
-
-
-def _replace_indeterminate(effect: AppliedEffect) -> AppliedEffect:
-    """Mark an effect as having no known outcome."""
-    return replace(effect, indeterminate=True)
 
 
 def _kind(raw: Any) -> ActionKind | None:

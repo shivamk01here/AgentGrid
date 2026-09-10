@@ -241,3 +241,46 @@ class TestMalformedPayloads:
         effect = replay_effects(await ledger.read(tenant, run_id))[0]
 
         assert effect.amount is None
+
+
+class TestUnansweredDispatches:
+    async def test_a_dispatch_with_no_settlement_is_not_assumed_to_have_landed(
+        self, ledger, run_id, tenant
+    ):
+        # The process died between writing the dispatch and settling the
+        # claim. From out here that is indistinguishable from a timeout, and
+        # it deserves the same answer: nobody knows.
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_DISPATCHED,
+            dispatch_payload(ActionId.generate()),
+        )
+
+        effect = replay_effects(await ledger.read(tenant, run_id))[0]
+
+        assert effect.indeterminate
+        assert not effect.is_reversible
+
+    async def test_a_failed_reversal_does_not_make_the_effect_unknown_again(
+        self, ledger, run_id, tenant
+    ):
+        action_id = ActionId.generate()
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_DISPATCHED,
+            dispatch_payload(action_id),
+        )
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_SETTLED,
+            {"action_id": str(action_id), "provider_reference": "psp_77"},
+        )
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_FAILED,
+            {"action_id": str(action_id), "compensation": True,
+             "detail": "reversal window closed"},
+        )
+
+        effect = replay_effects(await ledger.read(tenant, run_id))[0]
+
+        # It is still applied and still reversible - the reversal is what
+        # failed, and the next attempt has to try again.
+        assert not effect.indeterminate
+        assert effect.is_reversible
