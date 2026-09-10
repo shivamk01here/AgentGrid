@@ -120,6 +120,10 @@ def replay_effects(entries: Sequence[LedgerEntry]) -> tuple[AppliedEffect, ...]:
             existing = standing.get(action_id)
             if existing is None:
                 continue
+            if entry.payload.get("compensation") is True:
+                # A reversal failed, not the original dispatch. The effect is
+                # still applied - that is the whole problem.
+                continue
             if entry.payload.get("indeterminate") is True:
                 # The request left the process and never came back. Keep it,
                 # flagged - this is the one nobody may quietly resolve.
