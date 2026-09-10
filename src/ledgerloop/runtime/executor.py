@@ -14,7 +14,7 @@ instruction to reconcile - not to retry.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from ledgerloop.core.enums import IdempotencyState, LedgerEventType
@@ -277,6 +277,4 @@ def _describe(action: Action) -> dict[str, object]:
 
 def _mark_replayed(receipt: ActionReceipt) -> ActionReceipt:
     """Flag a receipt as served from an existing claim."""
-    from dataclasses import replace
-
     return replace(receipt, replayed=True)

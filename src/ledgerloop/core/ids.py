@@ -12,6 +12,7 @@ self-describing in logs, support tickets, and provider dashboards.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import secrets
 from dataclasses import dataclass
@@ -167,7 +168,5 @@ class IdempotencyKey(Identifier):
 
         # Hashed rather than concatenated: parts may contain separators or
         # PII, and the key ends up in provider-side logs.
-        import hashlib
-
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
         return cls(f"{cls.prefix}_{digest[:32]}")
