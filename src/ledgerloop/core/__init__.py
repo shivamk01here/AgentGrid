@@ -23,6 +23,7 @@ from ledgerloop.core.enums import (
 from ledgerloop.core.errors import (
     ApprovalRequired,
     BudgetExhaustedError,
+    CompensationError,
     ConcurrencyError,
     ConfigurationError,
     DeadlineExceededError,
@@ -118,6 +119,7 @@ __all__ = [
     # errors
     "ApprovalRequired",
     "BudgetExhaustedError",
+    "CompensationError",
     "ConcurrencyError",
     "ConfigurationError",
     "DeadlineExceededError",

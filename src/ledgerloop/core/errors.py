@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 __all__ = [
     "ApprovalRequired",
     "BudgetExhaustedError",
+    "CompensationError",
     "ConcurrencyError",
     "ConfigurationError",
     "DeadlineExceededError",
@@ -202,6 +203,33 @@ class IndeterminateError(LedgerloopError):
         super().__init__(message, context=context)
         self.idempotency_key = idempotency_key
         self.action_id = action_id
+
+
+class CompensationError(LedgerloopError):
+    """An applied effect could not be reversed.
+
+    Raised when rollback is asked for and cannot be delivered - the kind has
+    no reversal, or the provider refused one. The effect is still out there:
+    this is a hand-off to a human, not a retry signal.
+    """
+
+    default_failure_class = FailureClass.INTERNAL
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        action_id: ActionId | None = None,
+        kind: str | None = None,
+    ) -> None:
+        context: dict[str, Any] = {}
+        if action_id is not None:
+            context["action_id"] = str(action_id)
+        if kind is not None:
+            context["kind"] = kind
+        super().__init__(message, context=context)
+        self.action_id = action_id
+        self.kind = kind
 
 
 class LedgerIntegrityError(LedgerloopError):

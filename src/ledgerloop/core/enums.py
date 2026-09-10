@@ -166,7 +166,19 @@ class ActionKind(StrEnum):
         False does not mean "harmless" - it means a mistake cannot be
         walked back by the system and needs human remediation.
         """
-        return self in _REVERSIBLE_ACTIONS
+        return self in _REVERSAL_KINDS
+
+    @property
+    def reversal_kind(self) -> ActionKind | None:
+        """The kind of action that undoes this one, or None if nothing does.
+
+        A reversal is a new effect in its own right, not an erasure: undoing
+        a capture means issuing a refund, and the refund is what the payer
+        and the ledger both see. Naming the kind here keeps that visible in
+        the audit trail instead of hiding a reversal behind the kind it
+        reversed.
+        """
+        return _REVERSAL_KINDS.get(self)
 
     @property
     def is_read_only(self) -> bool:
@@ -184,14 +196,14 @@ _VALUE_MOVING_ACTIONS = frozenset(
     }
 )
 
-_REVERSIBLE_ACTIONS = frozenset(
-    {
-        ActionKind.CAPTURE,
-        ActionKind.TRANSFER,
-        ActionKind.ADJUSTMENT,
-        ActionKind.HOLD,
-    }
-)
+_REVERSAL_KINDS: dict[ActionKind, ActionKind] = {
+    ActionKind.CAPTURE: ActionKind.REFUND,
+    ActionKind.TRANSFER: ActionKind.TRANSFER,
+    ActionKind.ADJUSTMENT: ActionKind.ADJUSTMENT,
+    ActionKind.HOLD: ActionKind.RELEASE,
+}
+"""What undoes what. Membership here is what makes a kind reversible - the
+two facts cannot drift apart because there is only one of them."""
 
 
 @unique
