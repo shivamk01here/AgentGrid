@@ -181,6 +181,30 @@ Run it end to end, no database and no API key required:
 python examples/gated_refund.py
 ```
 
+## A batch that has to be walked back
+
+A run that fails halfway has usually already moved money. The compensator
+reads the run's own ledger to work out what is still standing, then reverses
+it newest-first — each reversal under its own idempotency claim, so running
+the rollback twice does not refund twice.
+
+```python
+report = await compensator.compensate(run)
+# -> standing=3 compensated=2 irreversible=1
+
+report.complete   # False - something is still out there
+report.stranded   # 1 - the payout, which has no reversal
+```
+
+It refuses to reverse three things, and each one leaves the run `FAILED`
+rather than `COMPENSATED`: a kind with no reversal, an effect whose outcome
+was never determined, and a reversal the provider declined. Half a rollback
+is worse than either end of it, so it is reported rather than rounded up.
+
+```bash
+python examples/rolled_back_batch.py
+```
+
 ## Architecture
 
 ```
@@ -192,7 +216,7 @@ ledgerloop/
 │   ├── models.py       Frozen entities with validated transitions
 │   ├── errors.py       Failure hierarchy carrying retry semantics
 │   └── ports.py        Async protocols for every external dependency
-├── runtime/        Coordinator, executor, reconciler - the moving parts
+├── runtime/        Coordinator, executor, reconciler, compensator - the moving parts
 ├── adapters/       Concrete ports: clocks, in-memory stores, approval gateway
 ├── policy/         Risk classification and approval rules
 ├── agent/          The loop: config, execution, retries, lifecycle
@@ -221,6 +245,7 @@ ledgerloop/
 | Run coordinator — propose → gate → halt → resume | Implemented |
 | Action executor — exactly-once dispatch | Implemented |
 | Reconciler for in-flight claims | Implemented |
+| Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
 | Idempotency, ledger, run, step stores | Implemented **in memory only** |
 | Durable (Postgres) adapters | Not started |
 | Action dispatchers (PSP, bank) | Not started — port defined, fake for tests only |
