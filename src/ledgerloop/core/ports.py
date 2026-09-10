@@ -23,6 +23,7 @@ from typing import Any, Protocol, Self, runtime_checkable
 
 from ledgerloop.core.enums import LedgerEventType, RunState
 from ledgerloop.core.ids import (
+    ActionId,
     ApprovalId,
     CorrelationId,
     IdempotencyKey,
