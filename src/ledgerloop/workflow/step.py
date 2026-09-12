@@ -30,6 +30,8 @@ class StepResult:
         return cls(step_name=name, success=False, error=error, duration_ms=duration_ms)
 
 
+@dataclass
+class Step:
     """A single step in a workflow."""
 
     name: str
