@@ -23,6 +23,8 @@ class TestTopLevelExports:
             "RunCoordinator",
             "Reconciler",
             "Compensator",
+            "Reaper",
+            "ReaperReport",
             "CompensationReport",
             "AppliedEffect",
             "replay_effects",
