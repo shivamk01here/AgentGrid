@@ -328,6 +328,21 @@ class ApprovalGateway(Protocol):
         """
         ...
 
+    async def expire(
+        self, tenant_id: TenantId, approval_id: ApprovalId, *, at: datetime
+    ) -> ApprovalRequest | None:
+        """Retire a request nobody answered in time.
+
+        Not a verdict. Expiry is what is left when no reviewer produced one,
+        and implementations must leave a decided request exactly as it is -
+        a grant that arrived before the deadline stays a grant.
+
+        Returns:
+            The expired request, or None when there was nothing to expire:
+            no such request, or one somebody had already decided.
+        """
+        ...
+
     def list_pending(
         self, tenant_id: TenantId, *, limit: int = 100
     ) -> AsyncIterator[ApprovalRequest]:

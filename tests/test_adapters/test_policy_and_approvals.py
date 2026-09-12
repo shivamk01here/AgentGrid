@@ -335,6 +335,39 @@ class TestApprovalGateway:
         expired = await gateway.expire_overdue(as_of=AT + timedelta(hours=2))
         assert len(expired) == 1
 
+    async def test_expiring_one_request_retires_it(self, gateway, run, decision, tenant):
+        request = await gateway.request(
+            run, _action(ActionKind.REFUND, "50000"), decision, at=AT
+        )
+
+        expired = await gateway.expire(tenant, request.id, at=AT + timedelta(days=4))
+
+        assert expired is not None
+        assert expired.state is ApprovalState.EXPIRED
+        stored = await gateway.get(tenant, request.id)
+        assert stored.state is ApprovalState.EXPIRED
+
+    async def test_expiring_a_decided_request_leaves_the_decision_standing(
+        self, gateway, run, decision, tenant
+    ):
+        # A grant that landed before the deadline is a grant. A sweep
+        # arriving afterwards does not get to take it back.
+        request = await gateway.request(
+            run, _action(ActionKind.REFUND, "50000"), decision, at=AT
+        )
+        await gateway.submit(
+            tenant, request.id, approved=True, actor="ops@example.com", at=AT
+        )
+
+        assert await gateway.expire(tenant, request.id, at=AT + timedelta(days=4)) is None
+        stored = await gateway.get(tenant, request.id)
+        assert stored.state is ApprovalState.GRANTED
+
+    async def test_expiring_a_request_that_is_not_there_is_not_an_error(
+        self, gateway, tenant
+    ):
+        assert await gateway.expire(tenant, ApprovalId.generate(), at=AT) is None
+
     async def test_a_failing_notifier_does_not_break_the_halt(self, run, decision, directory):
         async def broken(_request):
             raise RuntimeError("webhook down")

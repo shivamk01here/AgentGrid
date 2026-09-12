@@ -179,6 +179,26 @@ class InMemoryApprovalGateway:
             self._requests[key] = decided
             return decided
 
+    async def expire(
+        self, tenant_id: TenantId, approval_id: ApprovalId, *, at: datetime
+    ) -> ApprovalRequest | None:
+        """Retire a request nobody answered in time.
+
+        Returns:
+            The expired request, or None when it does not exist or a
+            reviewer had already decided it. A decision that landed before
+            the deadline is not something a later sweep gets to overwrite.
+        """
+        key = (tenant_id.value, approval_id.value)
+
+        async with self._lock:
+            request = self._requests.get(key)
+            if request is None or request.state is not ApprovalState.PENDING:
+                return None
+            expired = request.expire(at=at)
+            self._requests[key] = expired
+            return expired
+
     async def list_pending(
         self, tenant_id: TenantId, *, limit: int = 100
     ) -> AsyncIterator[ApprovalRequest]:
