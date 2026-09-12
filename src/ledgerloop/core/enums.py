@@ -467,6 +467,7 @@ class LedgerEventType(StrEnum):
     RUN_COMPLETED = "run.completed"
     RUN_FAILED = "run.failed"
     RUN_CANCELLED = "run.cancelled"
+    RUN_EXPIRED = "run.expired"
 
     STEP_STARTED = "step.started"
     STEP_COMPLETED = "step.completed"
