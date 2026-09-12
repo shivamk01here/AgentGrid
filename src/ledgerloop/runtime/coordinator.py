@@ -35,6 +35,8 @@ from ledgerloop.core.errors import (
 from ledgerloop.core.models import Action, PolicyDecision, Run
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from ledgerloop.core.ids import ApprovalId
     from ledgerloop.core.ports import (
         ApprovalGateway,
@@ -233,7 +235,7 @@ class RunCoordinator:
         )
 
     async def _halt_for_approval(
-        self, run: Run, action: Action, decision: PolicyDecision, *, at
+        self, run: Run, action: Action, decision: PolicyDecision, *, at: datetime
     ) -> ActionResult:
         """Raise an approval and park the run against it."""
         request = await self._approvals.request(
