@@ -115,6 +115,42 @@ Three things it will not do:
 
 See `examples/rolled_back_batch.py` for a full run of this in memory.
 
+## Runs That Nobody Comes Back To
+
+A run halted on a policy gate waits indefinitely. That is the right default
+for a signature that arrives on Tuesday, and the wrong one for a case that
+stopped mattering last week — the run sits in `AWAITING_APPROVAL` and its
+request sits in somebody's queue.
+
+The reaper sweeps the halted runs whose deadline has passed.
+
+```python
+from ledgerloop import Reaper
+
+reaper = Reaper(
+    runs=run_store,
+    approvals=gateway,
+    ledger=ledger,
+    clock=clock,
+)
+
+report = await reaper.sweep()
+print(report)  # checked=4 expired=4 approvals_retired=3 skipped=0
+```
+
+Each expired run ends `EXPIRED` with `DEADLINE_EXCEEDED`, the request behind
+it is retired, and both land in the run's own hash-chained ledger. Run it on
+a schedule, next to the reconciler.
+
+Two things to know before you rely on it:
+
+- expiry is opt-in. A run whose `RunSpec` has no `deadline` is never swept,
+  because a caller who set none has not said when the case stops mattering.
+- it reverses nothing. A run can have moved money before it halted; that is
+  the compensator's job, and an expired run is a good candidate for it.
+
+See `examples/expired_approval.py` for a full run of this in memory.
+
 ## Next Steps
 
 - Read the [Architecture Guide](architecture.md)

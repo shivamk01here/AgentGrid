@@ -1,7 +1,7 @@
 """A batch that goes wrong halfway, and gets walked back out.
 
-Runs entirely in memory - no database, no payment provider, no API key. Three
-captures land, the fourth effect is a payout that cannot be undone, and the
+Runs entirely in memory - no database, no payment provider, no API key. Two
+captures land, the third effect is a payout that cannot be undone, and the
 rollback has to tell you the difference between what it reversed and what it
 left behind.
 

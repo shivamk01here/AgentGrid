@@ -205,6 +205,36 @@ is worse than either end of it, so it is reported rather than rounded up.
 python examples/rolled_back_batch.py
 ```
 
+## An approval that never comes
+
+A halted run is safe: nothing was dispatched, and the grant it is waiting on
+binds to one action fingerprint. It is not free. It holds a request in a
+reviewer's queue, and the deadline the caller set — because the case stops
+mattering after Friday — goes by with nothing watching it.
+
+The reaper is what watches. It sweeps the runs whose deadline passed while
+they were still halted, ends each one, and retires the request behind it.
+
+```python
+report = await reaper.sweep()
+# -> checked=4 expired=4 approvals_retired=3 skipped=0
+
+# the run is EXPIRED with DEADLINE_EXCEEDED on it, and its reviewer's queue
+# is that much shorter. nobody can sign off on it now.
+```
+
+The run moves first and the approval second, both under the run's version
+check. Do it the other way round and a worker that resumed a run a moment
+earlier has a perfectly good grant pulled out from under it.
+
+Expiry is opt-in: a run whose `RunSpec` carries no deadline is never swept.
+And nothing here reverses anything — a run may well have moved money before
+it halted, and walking that back is the compensator's job.
+
+```bash
+python examples/expired_approval.py
+```
+
 ## Architecture
 
 ```
@@ -216,7 +246,7 @@ ledgerloop/
 │   ├── models.py       Frozen entities with validated transitions
 │   ├── errors.py       Failure hierarchy carrying retry semantics
 │   └── ports.py        Async protocols for every external dependency
-├── runtime/        Coordinator, executor, reconciler, compensator - the moving parts
+├── runtime/        Coordinator, executor, reconciler, compensator, reaper
 ├── adapters/       Concrete ports: clocks, in-memory stores, approval gateway
 ├── policy/         Risk classification and approval rules
 ├── agent/          The loop: config, execution, retries, lifecycle
@@ -246,6 +276,7 @@ ledgerloop/
 | Action executor — exactly-once dispatch | Implemented |
 | Reconciler for in-flight claims | Implemented |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
+| Reaper — expiry of halted runs | Implemented — deadline-driven, retires the request behind it |
 | Idempotency, ledger, run, step stores | Implemented **in memory only** |
 | Durable (Postgres) adapters | Not started |
 | Action dispatchers (PSP, bank) | Not started — port defined, fake for tests only |
