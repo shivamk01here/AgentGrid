@@ -272,7 +272,11 @@ class RunCoordinator:
         outcome = await self._executor.execute(
             action, run_id=run.id, tenant_id=run.tenant_id
         )
-        if outcome.succeeded and action.amount is not None:
+        # A replayed outcome is the first outcome, handed back out of the
+        # claim. Counting it again would make the run's own total - the
+        # figure max_value_moved is checked against - say twice what left
+        # the account.
+        if outcome.succeeded and not outcome.replayed and action.amount is not None:
             try:
                 return await self._save(run.record_value_moved(action.amount)), outcome
             except (ConcurrencyError, ValueError):

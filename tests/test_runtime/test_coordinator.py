@@ -346,3 +346,28 @@ class TestTheRunThatComesBack:
         stored = await runs.get(tenant, run.id)
         assert result.run.version == stored.version
         assert result.run.value_moved == stored.value_moved
+
+
+class TestValueMoved:
+    """The running total is the last defence when a policy is misconfigured."""
+
+    async def test_an_executed_action_adds_to_the_total(
+        self, coordinator, runs, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        result = await coordinator.propose(run, _refund("1000"))
+
+        assert result.run.value_moved == Money.from_major("1000", Currency.INR)
+
+    async def test_a_replayed_action_is_not_counted_twice(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        # Same effect, proposed twice. The claim replays the first receipt
+        # rather than dispatching, and the money only ever left once.
+        run = await _running_run(runs, tenant)
+        first = await coordinator.propose(run, _refund("1000"))
+        again = await coordinator.propose(first.run, _refund("1000"))
+
+        assert again.outcome.replayed
+        assert dispatcher.dispatch_count == 1
+        assert again.run.value_moved == Money.from_major("1000", Currency.INR)
