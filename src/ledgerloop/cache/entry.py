@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -20,6 +21,4 @@ class CacheEntry:
         """Check if this entry has expired based on TTL."""
         if self.ttl is None:
             return False
-        import time
-
         return time.time() > self.created_at + self.ttl

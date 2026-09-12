@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from ledgerloop.events.bus import Event
 from ledgerloop.llm.provider import LLMResponse, TokenUsage
 
 if TYPE_CHECKING:
@@ -265,8 +266,6 @@ class AgentLoop:
         if bus is None:
             return
         try:
-            from ledgerloop.events.bus import Event
-
             await bus.emit(Event(topic=topic, payload=payload, source=self._agent.id))
         except Exception:
             logger.exception("Failed to emit event topic=%s", topic)

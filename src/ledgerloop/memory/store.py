@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,6 +22,4 @@ class MemoryEntry:
         """Check if this entry has expired."""
         if self.expires_at is None:
             return False
-        import time
-
         return time.time() > self.expires_at

@@ -6,6 +6,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from ledgerloop.agent.loop import AgentLoop
+
 if TYPE_CHECKING:
     from ledgerloop.llm.provider import LLMProvider
     from ledgerloop.tools.base import BaseTool
@@ -117,8 +119,6 @@ class Agent:
         Use this instead of `run()` when you need the step ledger, token
         usage, or the reason the loop stopped - not just the final text.
         """
-        from ledgerloop.agent.loop import AgentLoop
-
         if self._provider is None:
             raise RuntimeError(
                 f"Agent {self.name!r} has no provider attached. "

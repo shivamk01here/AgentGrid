@@ -15,6 +15,7 @@ Slack, an ops console, or a queue. What it must not do is decide anything.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 
@@ -22,6 +23,8 @@ from ledgerloop.core.enums import ApprovalState, PolicyEffect
 from ledgerloop.core.errors import ConfigurationError, PolicyViolationError, StateTransitionError
 from ledgerloop.core.ids import ApprovalId, TenantId
 from ledgerloop.core.models import Action, ApprovalRequest, PolicyDecision, Run
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["ApproverDirectory", "InMemoryApprovalGateway"]
 
@@ -244,8 +247,4 @@ class InMemoryApprovalGateway:
         try:
             await self._notifier(request)
         except Exception:  # noqa: BLE001 - notification must never break a halt
-            import logging
-
-            logging.getLogger(__name__).exception(
-                "Approval notification failed for %s", request.id
-            )
+            logger.exception("Approval notification failed for %s", request.id)

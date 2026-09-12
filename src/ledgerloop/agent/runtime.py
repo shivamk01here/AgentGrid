@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from ledgerloop.agent.base import Agent, AgentConfig
+from ledgerloop.events.bus import Event
 from ledgerloop.llm.provider import LLMError
 
 if TYPE_CHECKING:
@@ -52,7 +53,6 @@ class AgentRuntime:
         if bus is None:
             return
         try:
-            from ledgerloop.events.bus import Event
             await bus.emit(Event(topic=topic, payload=payload, source=self.agent.id))
         except Exception:
             logger.exception("Failed to emit event topic=%s", topic)
