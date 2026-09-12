@@ -133,6 +133,13 @@ class TestActionKindSemantics:
         assert not ActionKind.PAYOUT.is_reversible
         assert not ActionKind.DISPUTE_RESPONSE.is_reversible
 
+    def test_a_reversal_is_not_reversible_but_is_still_a_reversal(self):
+        assert ActionKind.REFUND.is_reversal
+        assert ActionKind.RELEASE.is_reversal
+        assert not ActionKind.REFUND.is_reversible
+        assert not ActionKind.CAPTURE.is_reversal
+        assert not ActionKind.PAYOUT.is_reversal
+
     def test_read_only_kinds(self):
         assert ActionKind.READ.is_read_only
         assert ActionKind.ANNOTATE.is_read_only

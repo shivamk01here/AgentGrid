@@ -83,6 +83,23 @@ class TestClassification:
             is RiskTier.LOW
         )
 
+    def test_a_small_refund_is_not_critical_just_because_nothing_undoes_it(self):
+        # A refund is how the system walks a capture back. Ranking it above
+        # the capture it reverses means the mistake auto-executes and the
+        # remedy needs a signature.
+        policy = ThresholdPolicy.conservative()
+        assert (
+            ThresholdPolicyEngine.classify(_action(ActionKind.REFUND, "1000"), policy)
+            is RiskTier.LOW
+        )
+
+    def test_a_large_refund_still_ranks_high(self):
+        policy = ThresholdPolicy.conservative()
+        assert (
+            ThresholdPolicyEngine.classify(_action(ActionKind.REFUND, "30000"), policy)
+            is RiskTier.HIGH
+        )
+
 
 class TestEvaluation:
     async def test_read_only_actions_are_allowed(self, run):
@@ -94,6 +111,7 @@ class TestEvaluation:
         engine = ThresholdPolicyEngine()
         decision = await engine.evaluate(_action(ActionKind.REFUND, "1000"), run, at=AT)
         assert decision.effect is PolicyEffect.ALLOW
+        assert decision.rule_id == "allow-small-refund"
 
     async def test_large_refunds_require_approval(self, run):
         engine = ThresholdPolicyEngine()

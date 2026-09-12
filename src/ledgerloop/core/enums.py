@@ -181,6 +181,19 @@ class ActionKind(StrEnum):
         return _REVERSAL_KINDS.get(self)
 
     @property
+    def is_reversal(self) -> bool:
+        """True when this kind is what undoes some other kind.
+
+        A refund undoes a capture; a release undoes a hold. Nothing undoes
+        them in turn, but that is not the same thing as a fresh commitment
+        of somebody else's money - it is the remedy the system reaches for
+        when something has to come back out. Policy has to be able to tell
+        the two apart, or the only action that can walk a mistake back is
+        also the one it refuses to take.
+        """
+        return self in _REVERSALS
+
+    @property
     def is_read_only(self) -> bool:
         """True when the action leaves no external trace."""
         return self in (ActionKind.READ, ActionKind.ANNOTATE)
@@ -204,6 +217,10 @@ _REVERSAL_KINDS: dict[ActionKind, ActionKind] = {
 }
 """What undoes what. Membership here is what makes a kind reversible - the
 two facts cannot drift apart because there is only one of them."""
+
+_REVERSALS = frozenset(_REVERSAL_KINDS.values())
+"""The kinds that exist to undo another one, read straight off the same dict
+so the two can never disagree about which is which."""
 
 
 @unique

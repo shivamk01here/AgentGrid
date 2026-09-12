@@ -238,14 +238,21 @@ class ThresholdPolicyEngine:
     def classify(action: Action, policy: ThresholdPolicy) -> RiskTier:
         """Assign a risk tier from the action's own properties.
 
-        Computed, never taken from the model. An irreversible action that
-        moves value is CRITICAL regardless of size, because a mistake there
-        cannot be walked back by the system at all.
+        Computed, never taken from the model. Value movement nothing can
+        walk back is CRITICAL regardless of size - a payout is gone the
+        moment it lands. A reversal is the exception: nothing undoes a refund
+        either, but a refund is what undoing looks like, and a tier that by
+        definition never auto-executes would put the remedy further out of
+        reach than the mistake.
         """
         if action.kind.is_read_only:
             return RiskTier.NONE
 
-        if action.kind.moves_value and not action.kind.is_reversible:
+        if (
+            action.kind.moves_value
+            and not action.kind.is_reversible
+            and not action.kind.is_reversal
+        ):
             return RiskTier.CRITICAL
 
         if not action.kind.moves_value:
