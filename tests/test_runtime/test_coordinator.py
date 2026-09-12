@@ -302,3 +302,47 @@ class TestEndToEnd:
             e for e in await ledger.read(tenant, run.id) if e.event_type.value == "approval.granted"
         )
         assert granted.payload["decided_by"] == APPROVER
+
+
+class TestTheRunThatComesBack:
+    """A caller drives the next proposal off the run in the last result."""
+
+    async def test_the_result_carries_the_run_as_it_now_stands(
+        self, coordinator, runs, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        result = await coordinator.propose(run, _refund("1000"))
+
+        stored = await runs.get(tenant, run.id)
+        assert result.run.version == stored.version
+        assert result.run.value_moved == stored.value_moved
+
+    async def test_a_second_proposal_is_not_a_lost_concurrency_race(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        # Executing the first one advanced the stored version. Handing back
+        # the run from before it ran means the next save is checked against
+        # a version nobody holds any more.
+        run = await _running_run(runs, tenant)
+        first = await coordinator.propose(run, _refund("1000"))
+
+        second = await coordinator.propose(first.run, _refund("2000"))
+
+        assert second.executed
+        assert dispatcher.dispatch_count == 2
+
+    async def test_the_resumed_run_comes_back_at_its_stored_version(
+        self, coordinator, runs, gateway, tenant, clock
+    ):
+        run = await _running_run(runs, tenant)
+        action = _refund("50000")
+        halted = await coordinator.propose(run, action)
+        await gateway.submit(
+            tenant, halted.approval_id, approved=True, actor=APPROVER, at=clock.now()
+        )
+
+        result = await coordinator.resume(halted.run, action)
+
+        stored = await runs.get(tenant, run.id)
+        assert result.run.version == stored.version
+        assert result.run.value_moved == stored.value_moved

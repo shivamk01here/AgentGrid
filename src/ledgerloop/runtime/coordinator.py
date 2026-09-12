@@ -149,8 +149,8 @@ class RunCoordinator:
         if decision.effect is PolicyEffect.REQUIRE_APPROVAL:
             return await self._halt_for_approval(run, action, decision, at=now)
 
-        outcome = await self._execute(run, action)
-        return ActionResult(decision=decision, run=run, outcome=outcome)
+        executed, outcome = await self._execute(run, action)
+        return ActionResult(decision=decision, run=executed, outcome=outcome)
 
     async def resume(self, run: Run, action: Action) -> ActionResult:
         """Resume a halted run once its approval has been decided.
@@ -223,7 +223,7 @@ class RunCoordinator:
             },
         )
 
-        outcome = await self._execute(running, action)
+        executed, outcome = await self._execute(running, action)
         decision = PolicyDecision(
             effect=PolicyEffect.ALLOW,
             risk_tier=request.risk_tier,
@@ -231,7 +231,7 @@ class RunCoordinator:
             rule_id="approved",
         )
         return ActionResult(
-            decision=decision, run=running, outcome=outcome, approval_id=request.id
+            decision=decision, run=executed, outcome=outcome, approval_id=request.id
         )
 
     async def _halt_for_approval(
@@ -260,20 +260,27 @@ class RunCoordinator:
         logger.info("Run %s halted awaiting approval %s", run.id, request.id)
         return ActionResult(decision=decision, run=halted, approval_id=request.id)
 
-    async def _execute(self, run: Run, action: Action) -> ExecutionOutcome:
-        """Execute an approved action and fold the result into the run."""
+    async def _execute(self, run: Run, action: Action) -> tuple[Run, ExecutionOutcome]:
+        """Execute an approved action and fold the result into the run.
+
+        Returns:
+            The run as it now stands, and what the executor did. The run has
+            to come back: recording the value moved advances its version, and
+            a caller still holding the one it passed in would lose the next
+            concurrency check it made.
+        """
         outcome = await self._executor.execute(
             action, run_id=run.id, tenant_id=run.tenant_id
         )
         if outcome.succeeded and action.amount is not None:
             try:
-                await self._save(run.record_value_moved(action.amount))
+                return await self._save(run.record_value_moved(action.amount)), outcome
             except (ConcurrencyError, ValueError):
                 # The money moved regardless. Losing the running total is a
                 # reporting problem; pretending the action failed would be a
                 # correctness one.
                 logger.exception("Could not record value moved for run %s", run.id)
-        return outcome
+        return run, outcome
 
     async def _save(self, run: Run) -> Run:
         """Persist a transitioned run at its new version."""
