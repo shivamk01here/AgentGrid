@@ -54,7 +54,8 @@ class InMemoryIdempotencyStore:
         replay is what makes a retried request safe.
 
         Returns:
-            The new claim, or the pre-existing record.
+            The new claim with `newly_claimed` set, or the pre-existing
+            record without it.
 
         Raises:
             IdempotencyConflictError: The key exists under a different
@@ -82,7 +83,10 @@ class InMemoryIdempotencyStore:
                 run_id=run_id,
             )
             self._records[storage_key] = record
-            return record
+            # Only this copy says so. The stored one stays False, so a second
+            # claim, a get, or a reconciliation sweep can never mistake an
+            # old claim for one it just took.
+            return replace(record, newly_claimed=True)
 
     async def settle(
         self,

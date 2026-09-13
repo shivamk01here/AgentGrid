@@ -245,6 +245,17 @@ class IdempotencyRecord:
     right audit chain."""
     settled_at: datetime | None = None
     receipt: ActionReceipt | None = None
+    newly_claimed: bool = False
+    """True only on the record handed back by the `claim` call that created
+    it. Every other read - a second claim, a `get`, a reconciliation sweep -
+    sees False.
+
+    It is the one way to tell a claim you now hold from one somebody else
+    left in flight, and the two look identical otherwise: same key, same
+    state, possibly the same action id. It defaults to False on purpose. A
+    store that never sets it makes every caller refuse to dispatch, which is
+    loud in the first test anyone runs; the opposite default would make
+    every caller dispatch, which is quiet until the second payment."""
 
     @property
     def is_settled(self) -> bool:

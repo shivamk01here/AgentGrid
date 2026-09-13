@@ -236,8 +236,16 @@ class IdempotencyStore(Protocol):
         A returned record in state `SUCCEEDED` carries the original receipt
         and the caller must replay it rather than dispatch again.
 
+        A returned record in state `IN_FLIGHT` is only the caller's to dispatch
+        against when `newly_claimed` is set. Without it, somebody else took
+        the claim - another worker, or an earlier attempt of the same action
+        that never came back - and the outcome is unknown. That goes to the
+        reconciler, never to the provider a second time.
+
         Returns:
-            The freshly created claim, or the pre-existing record.
+            The freshly created claim with `newly_claimed` set, or the
+            pre-existing record with it clear. Only the store knows which,
+            because only the store saw whether the insert won.
 
         Raises:
             IdempotencyConflictError: The key exists under a different

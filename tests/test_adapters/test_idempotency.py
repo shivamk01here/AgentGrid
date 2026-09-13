@@ -52,6 +52,27 @@ class TestClaim:
         second = await store.claim(key, tenant, "fp-1", at=AT + timedelta(seconds=5))
         assert second.claimed_at == first.claimed_at
 
+    async def test_the_claim_that_creates_the_record_is_told_so(self, store, tenant, key):
+        record = await store.claim(key, tenant, "fp-1", at=AT)
+        assert record.newly_claimed
+
+    async def test_a_second_claim_is_not_told_it_took_the_first(self, store, tenant, key):
+        # Same key, same fingerprint, same state. Without the flag this looks
+        # exactly like a claim the caller just took, and gets dispatched.
+        await store.claim(key, tenant, "fp-1", at=AT)
+        second = await store.claim(key, tenant, "fp-1", at=AT)
+        assert second.state is IdempotencyState.IN_FLIGHT
+        assert not second.newly_claimed
+
+    async def test_nothing_read_back_later_claims_to_be_new(self, store, tenant, key):
+        await store.claim(key, tenant, "fp-1", at=AT)
+
+        fetched = await store.get(key, tenant)
+        swept = [r async for r in store.find_in_flight(older_than=AT + timedelta(days=1))]
+
+        assert not fetched.newly_claimed
+        assert not any(r.newly_claimed for r in swept)
+
     async def test_settled_claim_replays_the_original_receipt(self, store, tenant, key):
         await store.claim(key, tenant, "fp-1", at=AT)
         receipt = _receipt()
@@ -73,6 +94,8 @@ class TestClaim:
             *(store.claim(key, tenant, "fp-1", at=AT) for _ in range(50))
         )
         assert len({r.claimed_at for r in results}) == 1
+        # ...and exactly one of the fifty was told it was the one.
+        assert sum(r.newly_claimed for r in results) == 1
         assert len(store.snapshot()) == 1
 
     async def test_tenants_are_isolated(self, store, key):
