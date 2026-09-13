@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from ledgerloop.ratelimit.bucket import TokenBucket
 from ledgerloop.ratelimit.config import RateLimitConfig
@@ -31,7 +30,7 @@ class RateLimiter:
 
     def __init__(self, config: RateLimitConfig | None = None) -> None:
         self._config = config or RateLimitConfig()
-        self._buckets: dict[str, TokenBucket] = field(default_factory=dict)
+        self._buckets: dict[str, TokenBucket] = {}
         self._stats: dict[str, dict[str, int]] = {}
 
     @property
