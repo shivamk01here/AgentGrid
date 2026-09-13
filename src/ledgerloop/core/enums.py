@@ -388,7 +388,7 @@ class StopReason(StrEnum):
     """Halted on a gate. Resumable."""
 
     BUDGET_EXHAUSTED = "budget_exhausted"
-    """The run's token or cost budget ran out."""
+    """The run's token, cost, or value budget ran out."""
 
     DEADLINE_EXCEEDED = "deadline_exceeded"
     """The run's wall-clock deadline passed."""

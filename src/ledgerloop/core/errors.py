@@ -286,7 +286,7 @@ class ApprovalRequired(LedgerloopError):
 
 
 class BudgetExhaustedError(LedgerloopError):
-    """The run consumed its token or cost budget."""
+    """The run consumed its token, cost, or value budget."""
 
     default_failure_class = FailureClass.POLICY
 

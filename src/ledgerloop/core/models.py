@@ -108,7 +108,12 @@ class RunBudget:
     max_cost: Money | None = None
     max_value_moved: Money | None = None
     """Ceiling on the total value this run may move, across all actions.
-    The last line of defence when policy rules are misconfigured."""
+    The last line of defence when policy rules are misconfigured.
+
+    The coordinator holds every proposal against it before dispatch, and
+    counts effects whose outcome is still unknown as though they landed - a
+    ceiling that only added up the confirmed ones could be walked straight
+    through by a provider that keeps timing out."""
 
     def __post_init__(self) -> None:
         if self.max_iterations < 1:

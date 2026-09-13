@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["AppliedEffect", "replay_effects"]
+__all__ = ["AppliedEffect", "exposure", "replay_effects"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +145,33 @@ def replay_effects(entries: Sequence[LedgerEntry]) -> tuple[AppliedEffect, ...]:
             standing.pop(action_id, None)
 
     return tuple(standing.values())
+
+
+def exposure(effects: Sequence[AppliedEffect], currency: Currency) -> Money | None:
+    """How much value these effects have moved, or may have, in `currency`.
+
+    Indeterminate effects count. A dispatch nobody heard back from may well
+    have landed, and a total that only added up the answers it had would be a
+    figure for what we know about rather than for what went out - which is
+    the wrong thing to hold a ceiling against.
+
+    Args:
+        effects: Standing effects, as `replay_effects` returns them.
+        currency: The currency to total in.
+
+    Returns:
+        The total, or None when it cannot honestly be added up: an effect
+        that moves value is in another currency, or lost its amount somewhere
+        between the executor and the ledger.
+    """
+    total = Money.zero(currency)
+    for effect in effects:
+        if not effect.kind.moves_value:
+            continue
+        if effect.amount is None or effect.amount.currency is not currency:
+            return None
+        total = total + effect.amount
+    return total
 
 
 def _from_dispatch(entry: LedgerEntry, action_id: str) -> AppliedEffect | None:

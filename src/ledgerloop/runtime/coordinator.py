@@ -10,6 +10,12 @@ of three things happens.
 The halt is the interesting case. A halted run is durable: it can sit for
 days waiting on a human and then resume on the same action it stopped at,
 without re-running anything it already did.
+
+Whatever policy says, the run's own budget has the last word on money. An
+action that would carry a run past `RunBudget.max_value_moved` stops the run
+before anything is dispatched or anybody is asked, because the ceiling is
+there for exactly the day the policy is wrong - and an approval authorizes one
+action, not a bigger budget.
 """
 
 from __future__ import annotations
@@ -27,12 +33,14 @@ from ledgerloop.core.enums import (
     StopReason,
 )
 from ledgerloop.core.errors import (
+    BudgetExhaustedError,
     ConcurrencyError,
     LedgerloopError,
     PolicyViolationError,
     StateTransitionError,
 )
 from ledgerloop.core.models import Action, PolicyDecision, Run
+from ledgerloop.runtime.effects import exposure, replay_effects
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -122,6 +130,9 @@ class RunCoordinator:
         Raises:
             StateTransitionError: The run is not in a state that can act.
             PolicyViolationError: Policy denied the action.
+            BudgetExhaustedError: The action would carry the run past its
+                value ceiling. The run is FAILED, nothing was dispatched, and
+                no approval was raised.
         """
         if run.state is not RunState.RUNNING:
             raise StateTransitionError("Run", run.state.value, "acting")
@@ -145,6 +156,10 @@ class RunCoordinator:
         if decision.effect is PolicyEffect.DENY:
             logger.info("Action %s denied: %s", action.id, decision.reason)
             raise PolicyViolationError(decision.reason, rule_id=decision.rule_id)
+
+        # Checked before anyone is asked. A reviewer signing off on an action
+        # the run could never carry out is a wasted signature at best.
+        await self._check_ceiling(run, action)
 
         if decision.effect is PolicyEffect.REQUIRE_APPROVAL:
             return await self._halt_for_approval(run, action, decision, at=now)
@@ -171,6 +186,8 @@ class RunCoordinator:
                 approval is still pending.
             PolicyViolationError: The approval was rejected or expired, or it
                 does not authorize this action.
+            BudgetExhaustedError: Executing it would carry the run past its
+                value ceiling. The run is FAILED and nothing was dispatched.
         """
         if run.state is not RunState.AWAITING_APPROVAL:
             raise StateTransitionError("Run", run.state.value, "resuming")
@@ -223,6 +240,8 @@ class RunCoordinator:
             },
         )
 
+        # An approval authorizes one action, not a bigger budget.
+        await self._check_ceiling(running, action)
         executed, outcome = await self._execute(running, action)
         decision = PolicyDecision(
             effect=PolicyEffect.ALLOW,
@@ -259,6 +278,60 @@ class RunCoordinator:
         )
         logger.info("Run %s halted awaiting approval %s", run.id, request.id)
         return ActionResult(decision=decision, run=halted, approval_id=request.id)
+
+    async def _check_ceiling(self, run: Run, action: Action) -> None:
+        """Stop the run before an action carries it past its value ceiling.
+
+        What counts is everything the run's own ledger says is out there, or
+        may be - settled effects and unanswered ones alike - plus the action
+        on the table. An action whose idempotency key is already standing in
+        that chain is let through: proposing it again replays the first
+        outcome or waits on it, and either way nothing new moves.
+
+        Raises:
+            BudgetExhaustedError: The action would take the run past
+                `RunBudget.max_value_moved`, or cannot be measured against it
+                at all. The run is FAILED by the time this is raised, and
+                nothing has been dispatched or put in front of a reviewer.
+        """
+        ceiling = run.spec.budget.max_value_moved
+        amount = action.amount
+        if ceiling is None or amount is None or not action.kind.moves_value:
+            return
+
+        standing = replay_effects(await self._ledger.read(run.tenant_id, run.id))
+        if any(effect.idempotency_key == action.idempotency_key for effect in standing):
+            return
+
+        moved = exposure(standing, ceiling.currency)
+        if moved is None or amount.currency is not ceiling.currency:
+            reason = f"{amount} cannot be measured against this run's ceiling of {ceiling}"
+        elif moved + amount > ceiling:
+            reason = (
+                f"{amount} would take this run to {moved + amount}, "
+                f"past its ceiling of {ceiling}"
+            )
+        else:
+            return
+
+        logger.error("Run %s stopped at its value ceiling: %s", run.id, reason)
+        failed = await self._save(
+            run.fail(reason, at=self._clock.now(), stop_reason=StopReason.BUDGET_EXHAUSTED)
+        )
+        await self._write(
+            failed,
+            LedgerEventType.RUN_FAILED,
+            {
+                "action_id": str(action.id),
+                "reason": reason,
+                "stop_reason": StopReason.BUDGET_EXHAUSTED.value,
+                "ceiling_minor": ceiling.minor_units,
+                "currency": ceiling.currency.value,
+            },
+        )
+        raise BudgetExhaustedError(
+            reason, context={"run_id": str(run.id), "action_id": str(action.id)}
+        )
 
     async def _execute(self, run: Run, action: Action) -> tuple[Run, ExecutionOutcome]:
         """Execute an approved action and fold the result into the run.
