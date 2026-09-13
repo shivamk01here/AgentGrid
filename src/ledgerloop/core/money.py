@@ -149,14 +149,20 @@ class Money:
         if total_weight == 0:
             raise ValueError("allocate weights must not sum to zero")
 
+        if self.minor_units < 0:
+            # Split the magnitude and put the sign back. Floor division rounds
+            # a negative share away from zero, so a reversal split the direct
+            # way does not come out as the negation of the charge it reverses,
+            # and each party is left a unit up or down after a full refund.
+            return tuple(-part for part in (-self).allocate(weights))
+
         parts = [self.minor_units * w // total_weight for w in weights]
         remainder = self.minor_units - sum(parts)
 
         # Hand out the leftover units to the heaviest weights first.
         order = sorted(range(len(weights)), key=lambda i: weights[i], reverse=True)
-        step = 1 if remainder >= 0 else -1
-        for i in range(abs(remainder)):
-            parts[order[i % len(order)]] += step
+        for i in range(remainder):
+            parts[order[i % len(order)]] += 1
 
         return tuple(Money(p, self.currency) for p in parts)
 
