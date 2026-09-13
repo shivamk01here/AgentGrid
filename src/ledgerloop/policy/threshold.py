@@ -107,7 +107,9 @@ class ThresholdPolicy:
     auto_approve_ceiling: Money | None = None
     """Hard ceiling. Any amount at or above this needs at least a human's
     approval, whatever the rules say - the backstop for a misconfigured rule
-    set. It only ever tightens: a rule that denies still denies."""
+    set. It only ever tightens: a rule that denies still denies. An amount in
+    another currency counts as above it, since there is nothing here to
+    convert it with."""
 
     def __post_init__(self) -> None:
         if self.default_effect is PolicyEffect.REQUIRE_APPROVAL and not self.default_approver_role:
@@ -196,22 +198,19 @@ class ThresholdPolicyEngine:
         if effect is PolicyEffect.DENY:
             return self._decide(effect, risk, rule, policy)
 
-        above_ceiling = self._at_or_above_ceiling(action, policy)
-        if above_ceiling:
+        breach = self._ceiling_breach(action, policy)
+        if breach is not None:
             risk = max(risk, RiskTier.HIGH)
 
         # The ceiling outranks a rule that would let a large amount through,
         # and names itself when it does, so the reviewer sees the real reason.
         # A rule that already asks for approval keeps its own approver - that
         # role may well be stricter than the tenant default.
-        if above_ceiling and (rule is None or rule.effect is PolicyEffect.ALLOW):
+        if breach is not None and (rule is None or rule.effect is PolicyEffect.ALLOW):
             return PolicyDecision(
                 effect=PolicyEffect.REQUIRE_APPROVAL,
                 risk_tier=risk,
-                reason=(
-                    f"{action.amount} is at or above the auto-approval ceiling "
-                    f"of {policy.auto_approve_ceiling}"
-                ),
+                reason=breach,
                 rule_id="ceiling",
                 approver_role=policy.default_approver_role,
             )
@@ -249,15 +248,25 @@ class ThresholdPolicyEngine:
         )
 
     @staticmethod
-    def _at_or_above_ceiling(action: Action, policy: ThresholdPolicy) -> bool:
-        """True when the tenant's hard ceiling says this amount needs a human."""
+    def _ceiling_breach(action: Action, policy: ThresholdPolicy) -> str | None:
+        """Why the tenant's hard ceiling wants a human for this amount, if it does.
+
+        An amount in a different currency from the ceiling counts as over it.
+        There is no rate in here to compare the two at, and reading "cannot
+        tell" as "below" is how a rule set that allows every refund lets a
+        large USD one straight through an INR ceiling.
+        """
         ceiling = policy.auto_approve_ceiling
-        return (
-            ceiling is not None
-            and action.amount is not None
-            and action.amount.currency is ceiling.currency
-            and action.amount >= ceiling
-        )
+        if ceiling is None or action.amount is None:
+            return None
+        if action.amount.currency is not ceiling.currency:
+            return (
+                f"{action.amount} cannot be measured against the auto-approval "
+                f"ceiling of {ceiling}"
+            )
+        if action.amount >= ceiling:
+            return f"{action.amount} is at or above the auto-approval ceiling of {ceiling}"
+        return None
 
     @staticmethod
     def classify(action: Action, policy: ThresholdPolicy) -> RiskTier:

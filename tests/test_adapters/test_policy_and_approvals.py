@@ -183,6 +183,36 @@ class TestEvaluation:
         assert decision.approver_role == "treasury"
         assert decision.risk_tier >= RiskTier.HIGH
 
+    async def test_an_amount_in_another_currency_does_not_slip_under_the_ceiling(self, run):
+        # A rule set that allows every refund, an INR ceiling, and a very large
+        # USD refund. There is no rate to compare them at, and "cannot tell"
+        # used to be read as "below" - so it went through without a human.
+        policy = ThresholdPolicy(
+            rules=(
+                PolicyRule(
+                    effect=PolicyEffect.ALLOW,
+                    reason="Allow all refunds",
+                    rule_id="allow-everything",
+                    kinds=frozenset({ActionKind.REFUND}),
+                ),
+            ),
+            auto_approve_ceiling=Money.from_major("25000", Currency.INR),
+        )
+        engine = ThresholdPolicyEngine(default_policy=policy)
+        usd = Action(
+            id=ActionId.generate(),
+            kind=ActionKind.REFUND,
+            description="USD refund",
+            amount=Money.from_major("1000000", Currency.USD),
+            idempotency_key=IdempotencyKey.derive("refund", "usd", "100000000"),
+        )
+
+        decision = await engine.evaluate(usd, run, at=AT)
+
+        assert decision.effect is PolicyEffect.REQUIRE_APPROVAL
+        assert decision.rule_id == "ceiling"
+        assert "cannot be measured" in decision.reason
+
     async def test_unmatched_actions_fall_back_to_requiring_approval(self, run):
         engine = ThresholdPolicyEngine(default_policy=ThresholdPolicy())
         decision = await engine.evaluate(_action(ActionKind.ADJUSTMENT, "10"), run, at=AT)
