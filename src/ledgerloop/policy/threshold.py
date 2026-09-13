@@ -4,14 +4,17 @@ Classifies a proposed action by risk and rules on it. The rules are ordered
 and the first match wins, so a tenant can layer specific carve-outs above
 broad defaults without the outcome depending on dictionary ordering.
 
-Two invariants hold regardless of configuration:
+Three invariants hold regardless of configuration:
 
 * An action the model proposes is never trusted to classify itself. Risk is
   computed from the action's kind and amount, both of which are validated
   domain values rather than model output.
-* `ActionKind.CRITICAL` risk never resolves to ALLOW. A misconfigured
-  threshold can make the system ask for approval too often; it must not be
-  able to make it stop asking.
+* `RiskTier.CRITICAL` never resolves to ALLOW, whether the ALLOW came from a
+  rule or from the tenant default. A misconfigured threshold can make the
+  system ask for approval too often; it must not be able to make it stop
+  asking.
+* The backstops only tighten. The ceiling and the CRITICAL guard can turn an
+  ALLOW into a request for approval, and nothing can turn a DENY into one.
 
 The engine is pure and deterministic. The same action under the same
 configuration always produces the same decision, which is what makes replay
@@ -102,8 +105,9 @@ class ThresholdPolicy:
     default_effect: PolicyEffect = PolicyEffect.REQUIRE_APPROVAL
     default_approver_role: str = "payments-approver"
     auto_approve_ceiling: Money | None = None
-    """Hard ceiling. Any amount at or above this requires approval no matter
-    what the rules say - the backstop for a misconfigured rule set."""
+    """Hard ceiling. Any amount at or above this needs at least a human's
+    approval, whatever the rules say - the backstop for a misconfigured rule
+    set. It only ever tightens: a rule that denies still denies."""
 
     def __post_init__(self) -> None:
         if self.default_effect is PolicyEffect.REQUIRE_APPROVAL and not self.default_approver_role:
@@ -183,18 +187,27 @@ class ThresholdPolicyEngine:
 
         policy = self._per_tenant.get(run.tenant_id.value, self._default)
         risk = self.classify(action, policy)
+        rule = next((r for r in policy.rules if r.matches(action)), None)
+        effect = policy.default_effect if rule is None else rule.effect
 
-        # The backstop runs before the rules, not after: a rule that would
-        # allow a large amount must not be able to override the ceiling.
-        if (
-            policy.auto_approve_ceiling is not None
-            and action.amount is not None
-            and action.amount.currency is policy.auto_approve_ceiling.currency
-            and action.amount >= policy.auto_approve_ceiling
-        ):
+        # A refusal is final. Everything below this line can only make a
+        # decision stricter: a backstop that turned a DENY into a question for
+        # a human would be loosening the very policy it exists to protect.
+        if effect is PolicyEffect.DENY:
+            return self._decide(effect, risk, rule, policy)
+
+        above_ceiling = self._at_or_above_ceiling(action, policy)
+        if above_ceiling:
+            risk = max(risk, RiskTier.HIGH)
+
+        # The ceiling outranks a rule that would let a large amount through,
+        # and names itself when it does, so the reviewer sees the real reason.
+        # A rule that already asks for approval keeps its own approver - that
+        # role may well be stricter than the tenant default.
+        if above_ceiling and (rule is None or rule.effect is PolicyEffect.ALLOW):
             return PolicyDecision(
                 effect=PolicyEffect.REQUIRE_APPROVAL,
-                risk_tier=max(risk, RiskTier.HIGH),
+                risk_tier=risk,
                 reason=(
                     f"{action.amount} is at or above the auto-approval ceiling "
                     f"of {policy.auto_approve_ceiling}"
@@ -203,35 +216,47 @@ class ThresholdPolicyEngine:
                 approver_role=policy.default_approver_role,
             )
 
-        for rule in policy.rules:
-            if not rule.matches(action):
-                continue
-            effect = rule.effect
-            # CRITICAL never resolves to ALLOW, whatever a rule says.
-            if risk is RiskTier.CRITICAL and effect is PolicyEffect.ALLOW:
-                effect = PolicyEffect.REQUIRE_APPROVAL
-            return PolicyDecision(
-                effect=effect,
-                risk_tier=risk,
-                reason=rule.reason,
-                rule_id=rule.rule_id,
-                approver_role=(
-                    rule.approver_role or policy.default_approver_role
-                    if effect is PolicyEffect.REQUIRE_APPROVAL
-                    else None
-                ),
-            )
+        # CRITICAL never resolves to ALLOW - not from a rule, and not from a
+        # tenant default either.
+        if risk is RiskTier.CRITICAL and effect is PolicyEffect.ALLOW:
+            effect = PolicyEffect.REQUIRE_APPROVAL
+
+        return self._decide(effect, risk, rule, policy)
+
+    @staticmethod
+    def _decide(
+        effect: PolicyEffect,
+        risk: RiskTier,
+        rule: PolicyRule | None,
+        policy: ThresholdPolicy,
+    ) -> PolicyDecision:
+        """The decision a matched rule, or the tenant default, arrived at."""
+        if rule is None:
+            reason = "No rule matched; falling back to the tenant default"
+            rule_id = "default"
+            approver_role = policy.default_approver_role
+        else:
+            reason = rule.reason
+            rule_id = rule.rule_id
+            approver_role = rule.approver_role or policy.default_approver_role
 
         return PolicyDecision(
-            effect=policy.default_effect,
+            effect=effect,
             risk_tier=risk,
-            reason="No rule matched; falling back to the tenant default",
-            rule_id="default",
-            approver_role=(
-                policy.default_approver_role
-                if policy.default_effect is PolicyEffect.REQUIRE_APPROVAL
-                else None
-            ),
+            reason=reason,
+            rule_id=rule_id,
+            approver_role=approver_role if effect is PolicyEffect.REQUIRE_APPROVAL else None,
+        )
+
+    @staticmethod
+    def _at_or_above_ceiling(action: Action, policy: ThresholdPolicy) -> bool:
+        """True when the tenant's hard ceiling says this amount needs a human."""
+        ceiling = policy.auto_approve_ceiling
+        return (
+            ceiling is not None
+            and action.amount is not None
+            and action.amount.currency is ceiling.currency
+            and action.amount >= ceiling
         )
 
     @staticmethod

@@ -143,6 +143,46 @@ class TestEvaluation:
         assert decision.effect is PolicyEffect.REQUIRE_APPROVAL
         assert decision.rule_id == "ceiling"
 
+    async def test_the_ceiling_never_turns_a_refusal_into_a_question(self, run):
+        # Payouts are not eligible for agent execution. A large one used to
+        # hit the ceiling first and come back REQUIRE_APPROVAL - so a reviewer
+        # could sign off on something the tenant had ruled out entirely.
+        engine = ThresholdPolicyEngine()
+        decision = await engine.evaluate(_action(ActionKind.PAYOUT, "30000"), run, at=AT)
+        assert decision.effect is PolicyEffect.DENY
+        assert decision.rule_id == "deny-payout"
+
+    async def test_a_permissive_default_cannot_allow_something_critical(self, run):
+        engine = ThresholdPolicyEngine(
+            default_policy=ThresholdPolicy(default_effect=PolicyEffect.ALLOW)
+        )
+        decision = await engine.evaluate(_action(ActionKind.PAYOUT, "100"), run, at=AT)
+        assert decision.effect is PolicyEffect.REQUIRE_APPROVAL
+        assert decision.approver_role
+
+    async def test_a_rule_that_already_wants_approval_keeps_its_approver(self, run):
+        # Above the ceiling, but a rule had already asked for someone more
+        # senior than the default. The ceiling must not quietly swap them out.
+        policy = ThresholdPolicy(
+            rules=(
+                PolicyRule(
+                    effect=PolicyEffect.REQUIRE_APPROVAL,
+                    reason="Refunds go to treasury",
+                    rule_id="treasury-refunds",
+                    kinds=frozenset({ActionKind.REFUND}),
+                    approver_role="treasury",
+                ),
+            ),
+            auto_approve_ceiling=Money.from_major("25000", Currency.INR),
+        )
+        engine = ThresholdPolicyEngine(default_policy=policy)
+
+        decision = await engine.evaluate(_action(ActionKind.REFUND, "100000"), run, at=AT)
+
+        assert decision.effect is PolicyEffect.REQUIRE_APPROVAL
+        assert decision.approver_role == "treasury"
+        assert decision.risk_tier >= RiskTier.HIGH
+
     async def test_unmatched_actions_fall_back_to_requiring_approval(self, run):
         engine = ThresholdPolicyEngine(default_policy=ThresholdPolicy())
         decision = await engine.evaluate(_action(ActionKind.ADJUSTMENT, "10"), run, at=AT)
