@@ -273,10 +273,15 @@ class RunCoordinator:
             action, run_id=run.id, tenant_id=run.tenant_id
         )
         # A replayed outcome is the first outcome, handed back out of the
-        # claim. Counting it again would make the run's own total - the
-        # figure max_value_moved is checked against - say twice what left
-        # the account.
-        if outcome.succeeded and not outcome.replayed and action.amount is not None:
+        # claim, so counting it again would say twice what left the account.
+        # And only kinds that move value count at all: a hold or a void can
+        # carry an amount, but blocking funds is not moving them.
+        if (
+            outcome.succeeded
+            and not outcome.replayed
+            and action.kind.moves_value
+            and action.amount is not None
+        ):
             try:
                 return await self._save(run.record_value_moved(action.amount)), outcome
             except (ConcurrencyError, ValueError):

@@ -371,3 +371,27 @@ class TestValueMoved:
         assert again.outcome.replayed
         assert dispatcher.dispatch_count == 1
         assert again.run.value_moved == Money.from_major("1000", Currency.INR)
+
+    async def test_a_hold_is_not_counted_as_value_moved(
+        self, coordinator, runs, gateway, dispatcher, tenant, clock
+    ):
+        # A hold carries an amount and blocks it. Nothing leaves anywhere, so
+        # nothing should land in the total that is meant to say what did.
+        run = await _running_run(runs, tenant)
+        hold = Action(
+            id=ActionId.generate(),
+            kind=ActionKind.HOLD,
+            description="Hold pending chargeback review",
+            amount=Money.from_major("1000", Currency.INR),
+            counterparty="acc_44",
+        )
+        halted = await coordinator.propose(run, hold)
+        await gateway.submit(
+            tenant, halted.approval_id, approved=True, actor=APPROVER, at=clock.now()
+        )
+
+        result = await coordinator.resume(halted.run, hold)
+
+        assert result.outcome.succeeded
+        assert dispatcher.dispatch_count == 1
+        assert result.run.value_moved is None
