@@ -205,6 +205,31 @@ is worse than either end of it, so it is reported rather than rounded up.
 python examples/rolled_back_batch.py
 ```
 
+## A run that knows when to stop
+
+Policy decides whether one action may go. A run's budget decides how much the
+whole run may move, and it is there for the day the policy is wrong.
+
+```python
+spec = RunSpec(
+    tenant_id=tenant,
+    objective="Clear the duplicate-charge queue",
+    budget=RunBudget(max_value_moved=Money.from_major("10000", Currency.INR)),
+)
+
+await coordinator.propose(run, build_refund("ord_1", "4000"))   # executed
+await coordinator.propose(run, build_refund("ord_2", "4000"))   # executed
+await coordinator.propose(run, build_refund("ord_3", "4000"))
+# -> BudgetExhaustedError: 4000.00 INR would take this run to 12000.00 INR,
+#    past its ceiling of 10000.00 INR. The run is FAILED; nothing was sent.
+```
+
+The check happens before anything is dispatched and before any approval is
+raised, and again on resume — an approval authorizes one action, not a bigger
+budget. It is measured against the run's own ledger, so an effect that timed
+out counts as though it landed. Proposing an effect that is already standing
+does not count twice. An amount in another currency fails closed.
+
 ## An approval that never comes
 
 A halted run is safe: nothing was dispatched, and the grant it is waiting on
@@ -277,6 +302,7 @@ ledgerloop/
 | Reconciler for in-flight claims | Implemented |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
 | Reaper — expiry of halted runs | Implemented — deadline-driven, retires the request behind it |
+| Run value ceiling | Implemented — checked before dispatch and approval, counts unanswered effects |
 | Idempotency, ledger, run, step stores | Implemented **in memory only** |
 | Durable (Postgres) adapters | Not started |
 | Action dispatchers (PSP, bank) | Not started — port defined, fake for tests only |

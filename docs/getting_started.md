@@ -115,6 +115,26 @@ Three things it will not do:
 
 See `examples/rolled_back_batch.py` for a full run of this in memory.
 
+## Capping What a Run Can Move
+
+Give a run a value ceiling and the coordinator holds every value-moving
+proposal against it:
+
+```python
+from ledgerloop.core import Currency, Money, RunBudget, RunSpec
+
+spec = RunSpec(
+    tenant_id=tenant,
+    objective="Refund today's duplicates",
+    budget=RunBudget(max_value_moved=Money.from_major("10000", Currency.INR)),
+)
+```
+
+An action that would take the run past it raises `BudgetExhaustedError`, and
+the run ends `FAILED` with `BUDGET_EXHAUSTED` before anything is dispatched.
+What counts is the run's ledger: settled effects and ones still waiting on an
+answer. Holds and voids carry amounts but move nothing, so they never count.
+
 ## Runs That Nobody Comes Back To
 
 A run halted on a policy gate waits indefinitely. That is the right default
