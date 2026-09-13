@@ -233,6 +233,57 @@ class TestIndeterminate:
         assert len(stale) == 1
 
 
+class TestAClaimSomebodyElseHolds:
+    """The claim exists and is unsettled, and this call did not take it."""
+
+    async def test_it_is_not_dispatched(
+        self, executor, dispatcher, idempotency, tenant, run_id, clock
+    ):
+        # Another worker claimed this effect a moment ago and is still
+        # waiting on the provider. From here that is indistinguishable from a
+        # worker that died mid-dispatch, and neither may be paid twice.
+        action = refund()
+        await idempotency.claim(
+            action.idempotency_key, tenant, action.fingerprint(), at=clock.now()
+        )
+
+        outcome = await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        assert dispatcher.dispatch_count == 0
+        assert outcome.indeterminate
+        assert outcome.needs_reconciliation
+
+    async def test_the_claim_is_left_for_the_reconciler(
+        self, executor, idempotency, tenant, run_id, clock
+    ):
+        action = refund()
+        await idempotency.claim(
+            action.idempotency_key, tenant, action.fingerprint(), at=clock.now()
+        )
+
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        record = await idempotency.get(action.idempotency_key, tenant)
+        assert record.state is IdempotencyState.IN_FLIGHT
+
+    async def test_the_refusal_is_ledgered_as_unresolved(
+        self, executor, idempotency, ledger, tenant, run_id, clock
+    ):
+        action = refund()
+        await idempotency.claim(
+            action.idempotency_key, tenant, action.fingerprint(), at=clock.now()
+        )
+
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        entries = await ledger.read(tenant, run_id)
+        # No dispatch entry: nothing left the process, and the chain must not
+        # say otherwise.
+        assert [e.event_type.value for e in entries] == ["action.failed"]
+        assert entries[0].payload["indeterminate"] is True
+        assert entries[0].payload["in_flight"] is True
+
+
 class TestReadOnlyActions:
     async def test_no_claim_is_taken(self, executor, idempotency, tenant, run_id):
         action = Action(

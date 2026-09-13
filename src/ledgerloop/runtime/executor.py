@@ -4,7 +4,7 @@ This is the piece that makes "exactly once" true rather than aspirational.
 Every value-moving action goes through here, and the order of operations is
 the entire guarantee:
 
-    claim -> (replay if already settled) -> dispatch -> settle
+    claim -> (replay if settled, stop if held) -> dispatch -> settle
 
 The claim is durable before the dispatch leaves the process. If we die
 between the two, the claim survives as `IN_FLIGHT`, which is a standing
@@ -137,6 +137,33 @@ class ActionExecutor:
                 error=None if record.state is IdempotencyState.SUCCEEDED else "previously failed",
             )
 
+        # 3. Held, but not by us. Another worker took this claim, or an earlier
+        #    attempt at the same effect dispatched and never heard back. The
+        #    outcome is unknown either way, and dispatching again is precisely
+        #    the second payment the claim was taken to prevent.
+        if not record.newly_claimed:
+            logger.error(
+                "Action %s is already in flight under key=%s - not dispatching it again",
+                action.id,
+                action.idempotency_key,
+            )
+            await self._write(
+                run_id,
+                tenant_id,
+                LedgerEventType.ACTION_FAILED,
+                {
+                    "action_id": str(action.id),
+                    "indeterminate": True,
+                    "in_flight": True,
+                    "error": "already in flight under this idempotency key",
+                },
+            )
+            return ExecutionOutcome(
+                receipt=None,
+                indeterminate=True,
+                error="Already in flight under this idempotency key - reconcile it first",
+            )
+
         await self._write(
             run_id,
             tenant_id,
@@ -144,7 +171,7 @@ class ActionExecutor:
             _describe(action),
         )
 
-        # 3. Dispatch.
+        # 4. Dispatch.
         try:
             receipt = await self._dispatcher.dispatch(action, at=self._clock.now())
         except IndeterminateError as exc:
@@ -179,7 +206,7 @@ class ActionExecutor:
             )
             return ExecutionOutcome(receipt=settled, error=str(exc))
 
-        # 4. Settle.
+        # 5. Settle.
         await self._idempotency.settle(
             action.idempotency_key, tenant_id, receipt, at=self._clock.now()
         )
