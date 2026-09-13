@@ -60,6 +60,8 @@ class MemoryEngine:
         namespace: str = "default",
         backend: MemoryBackend | None = None,
     ) -> None:
+        if ":" in namespace:
+            raise ValueError("namespace cannot contain ':' - it separates namespace from key")
         self.namespace = namespace
         self._backend: MemoryBackend = backend or InMemoryBackend()
 
@@ -89,23 +91,23 @@ class MemoryEngine:
             created_at=time.time(),
             expires_at=(time.time() + ttl_seconds) if ttl_seconds is not None else None,
         )
-        await self._backend.store(key, value, entry)
+        await self._backend.store(self._key(key), value, entry)
         logger.debug("Stored key=%s namespace=%s", key, self.namespace)
         return entry
 
     async def retrieve(self, key: str) -> Any | None:
         """Retrieve a value by key. Returns None if missing or expired."""
-        entry = await self._backend.retrieve(key)
+        entry = await self._backend.retrieve(self._key(key))
         if entry is None:
             return None
         if entry.is_expired():
-            await self._backend.delete(key)
+            await self._backend.delete(self._key(key))
             return None
         return entry.value
 
     async def delete(self, key: str) -> bool:
         """Delete a key. Returns True if it existed."""
-        return await self._backend.delete(key)
+        return await self._backend.delete(self._key(key))
 
     async def search(self, *, tag: str | None = None, prefix: str = "") -> list[MemoryEntry]:
         """Search memory entries by tag or key prefix within this namespace."""
@@ -133,10 +135,14 @@ class MemoryEngine:
         for entry in entries:
             if entry.namespace != self.namespace:
                 continue
-            if await self._backend.delete(entry.key):
+            if await self._backend.delete(self._key(entry.key)):
                 count += 1
         return count
 
     @property
     def size(self) -> int:
         return self._backend.size
+
+    def _key(self, key: str) -> str:
+        """Where `key` lives in a backend this namespace may be sharing."""
+        return f"{self.namespace}:{key}"
