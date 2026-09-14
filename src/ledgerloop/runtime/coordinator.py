@@ -206,11 +206,19 @@ class RunCoordinator:
 
         if request.state is not ApprovalState.GRANTED:
             resumed = await self._save(run.resume(at=self._clock.now()))
+            # An expired approval means the deadline passed; a rejected one
+            # means a human actively said no. The stop reason tells whoever
+            # picks this up later which problem they have.
+            stop_reason = (
+                StopReason.DEADLINE_EXCEEDED
+                if request.state is ApprovalState.EXPIRED
+                else StopReason.CANCELLED
+            )
             failed = await self._save(
                 resumed.fail(
                     f"Approval {request.state.value}",
                     at=self._clock.now(),
-                    stop_reason=StopReason.CANCELLED,
+                    stop_reason=stop_reason,
                 )
             )
             await self._write(
