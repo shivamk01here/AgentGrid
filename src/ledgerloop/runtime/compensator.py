@@ -13,12 +13,15 @@ transfer has to outlive the transfer it was covering. The claim is taken
 under a key derived from the original one, so running compensation twice
 reverses each effect exactly once rather than refunding twice.
 
-Three things it refuses to do, and all three end the run in FAILED rather
+Four things it refuses to do, and all four end the run in FAILED rather
 than COMPENSATED:
 
 * Reverse an effect whose kind has no reversal. A payout is gone.
 * Reverse an effect whose outcome was never determined. Reconcile it first.
 * Pretend a provider's refusal to reverse was a successful rollback.
+* Dispatch a reversal over a claim somebody else is already holding. The
+  outcome of the first attempt is unknown; a second dispatch is a double
+  refund waiting to happen.
 
 A partial rollback is a worse state than either extreme, so it is reported
 loudly instead of being rounded up to success.
@@ -30,14 +33,14 @@ import logging
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from ledgerloop.core.enums import LedgerEventType, RunState
+from ledgerloop.core.enums import IdempotencyState, LedgerEventType, RunState
 from ledgerloop.core.errors import LedgerloopError, StateTransitionError
 from ledgerloop.core.ids import IdempotencyKey
 from ledgerloop.runtime.effects import replay_effects
 
 if TYPE_CHECKING:
     from ledgerloop.core.ids import TenantId
-    from ledgerloop.core.models import ActionReceipt, Run
+    from ledgerloop.core.models import ActionReceipt, IdempotencyRecord, Run
     from ledgerloop.core.ports import (
         ActionDispatcher,
         Clock,
@@ -171,13 +174,41 @@ class Compensator:
             await self._write(run, effect, reversed_ok=False, detail="kind is not reversible")
             return replace(report, irreversible=report.irreversible + 1)
 
-        claimed = await self._claim(effect, run.tenant_id)
-        if claimed is None:
-            # Already reversed by an earlier attempt. The world is in the
-            # state we wanted, which is the only thing that matters.
-            logger.info("Effect %s was already reversed; skipping", effect.action_id)
-            await self._write(run, effect, reversed_ok=True, detail="already reversed")
-            return replace(report, replayed=report.replayed + 1)
+        record = await self._claim(effect, run)
+
+        if record.is_settled:
+            if record.state is IdempotencyState.SUCCEEDED:
+                # A previous attempt successfully reversed this effect.
+                logger.info("Effect %s was already reversed; skipping", effect.action_id)
+                await self._write(run, effect, reversed_ok=True, detail="already reversed")
+                return replace(report, replayed=report.replayed + 1)
+
+            # The reversal reached the provider and was rejected. Retrying under
+            # the same key would replay the rejection, not succeed. The effect
+            # is still out there: a human has to resolve this.
+            logger.error(
+                "Reversal of %s was previously attempted and rejected; run %s needs a human",
+                effect.action_id,
+                run.id,
+            )
+            await self._write(
+                run, effect, reversed_ok=False, detail="previously rejected by provider"
+            )
+            return replace(report, failed=report.failed + 1)
+
+        if not record.newly_claimed:
+            # Another worker is already reversing this effect. Dispatching
+            # again would be a second refund for the same capture: exactly
+            # the mistake the claim exists to prevent.
+            logger.error(
+                "Reversal of %s is already in flight - not dispatching it again on run %s",
+                effect.action_id,
+                run.id,
+            )
+            await self._write(
+                run, effect, reversed_ok=False, detail="reversal already in flight"
+            )
+            return replace(report, unresolved=report.unresolved + 1)
 
         try:
             receipt = await self._dispatcher.compensate(
@@ -190,7 +221,7 @@ class Compensator:
             await self._write(run, effect, reversed_ok=False, detail=str(exc))
             return replace(report, failed=report.failed + 1)
 
-        await self._settle(claimed, run.tenant_id, receipt)
+        await self._settle(reversal_key(effect), run.tenant_id, receipt)
         await self._write(
             run,
             effect,
@@ -201,22 +232,24 @@ class Compensator:
         )
         return replace(report, compensated=report.compensated + 1)
 
-    async def _claim(self, effect: AppliedEffect, tenant_id: TenantId) -> IdempotencyKey | None:
-        """Claim the reversal, or None when it has already been settled.
+    async def _claim(self, effect: AppliedEffect, run: Run) -> IdempotencyRecord:
+        """Claim the reversal key, returning the full record for the caller to inspect.
 
         The key is derived from the original effect's key, so the same
         reversal proposed by a second rollback attempt collides here rather
-        than reaching the provider.
+        than reaching the provider. The run id is carried on the claim so that
+        a reconciler can write the outcome to the right audit chain when a
+        reversal times out.
         """
         key = reversal_key(effect)
-        record = await self._idempotency.claim(
+        return await self._idempotency.claim(
             key,
-            tenant_id,
+            run.tenant_id,
             _reversal_fingerprint(effect),
             at=self._clock.now(),
             action_id=effect.action_id,
+            run_id=run.id,
         )
-        return None if record.is_settled else key
 
     async def _settle(
         self, key: IdempotencyKey, tenant_id: TenantId, receipt: ActionReceipt
