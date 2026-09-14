@@ -169,7 +169,7 @@ class AgentRuntime:
             "iterations": self._iteration,
             "success": False,
             "error": last_error,
-            "attempt": self.max_retries,
+            "attempt": attempt,
         }
 
     def reset(self) -> None:
