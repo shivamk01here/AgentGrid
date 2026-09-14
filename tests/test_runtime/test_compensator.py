@@ -238,6 +238,80 @@ class TestExactlyOnce:
         assert report.complete
         assert dispatcher.compensated == []
 
+    async def test_the_reversal_claim_carries_the_run_id(
+        self, compensator, executor, runs, ledger, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        action = capture("ord_1")
+        await apply(executor, run, action)
+
+        # Capture the reversal key before compensating; replay_effects returns
+        # an empty tuple after ACTION_COMPENSATED is written to the ledger.
+        effect = replay_effects(await ledger.read(tenant, run.id))[0]
+        rev_key = reversal_key(effect)
+
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        record = await idempotency.get(rev_key, tenant)
+        assert record is not None
+        assert record.run_id == run.id
+
+    async def test_a_reversal_in_flight_from_another_worker_is_not_dispatched_again(
+        self, compensator, executor, runs, idempotency, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        action = capture("ord_1")
+        await apply(executor, run, action)
+
+        # Another worker took the reversal claim and has not yet settled it.
+        key = IdempotencyKey.derive("reverse", str(action.idempotency_key))
+        await idempotency.claim(
+            key, tenant, f"reverse:{action.id}:capture", at=clock.now()
+        )
+
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        # Dispatching again would be a second refund. Report it as unresolved,
+        # not as compensated.
+        assert report.unresolved == 1
+        assert report.compensated == 0
+        assert not report.complete
+        assert dispatcher.compensated == []
+
+    async def test_a_previously_rejected_reversal_is_not_counted_as_success(
+        self, compensator, executor, runs, idempotency, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        action = capture("ord_1")
+        await apply(executor, run, action)
+
+        # A previous attempt reached the provider and was definitively rejected.
+        key = IdempotencyKey.derive("reverse", str(action.idempotency_key))
+        await idempotency.claim(
+            key, tenant, f"reverse:{action.id}:capture", at=clock.now()
+        )
+        await idempotency.settle(
+            key,
+            tenant,
+            ActionReceipt(
+                action_id=action.id,
+                state=IdempotencyState.FAILED,
+                failure_reason="Reversal window has closed",
+            ),
+            at=clock.now(),
+        )
+
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        # The effect is still out there. Counting this as replayed would make
+        # report.complete lie and write ACTION_COMPENSATED to the ledger,
+        # hiding the effect from every future replay_effects call.
+        assert report.failed == 1
+        assert report.replayed == 0
+        assert not report.complete
+        assert report.stranded == 1
+        assert dispatcher.compensated == []
+
 
 def _pretend_running(run):
     """A run as a restarted worker would find it: alive, mid-rollback.
