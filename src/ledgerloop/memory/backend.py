@@ -39,3 +39,7 @@ class MemoryBackend(Protocol):
     def size(self) -> int:
         """Number of entries in the backend."""
         ...
+
+    def count_for_prefix(self, prefix: str) -> int:
+        """Number of entries whose key starts with `prefix`."""
+        ...

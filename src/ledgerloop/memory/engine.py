@@ -45,6 +45,9 @@ class InMemoryBackend:
     def size(self) -> int:
         return len(self._store)
 
+    def count_for_prefix(self, prefix: str) -> int:
+        return sum(1 for k in self._store if k.startswith(prefix))
+
 
 class MemoryEngine:
     """Provides durable memory for agents.
@@ -141,7 +144,7 @@ class MemoryEngine:
 
     @property
     def size(self) -> int:
-        return self._backend.size
+        return self._backend.count_for_prefix(f"{self.namespace}:")
 
     def _key(self, key: str) -> str:
         """Where `key` lives in a backend this namespace may be sharing."""

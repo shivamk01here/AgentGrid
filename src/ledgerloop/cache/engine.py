@@ -45,6 +45,9 @@ class InMemoryCache:
     def size(self) -> int:
         return len(self._store)
 
+    def count_for_prefix(self, prefix: str) -> int:
+        return sum(1 for k in self._store if k.startswith(prefix))
+
 
 class CacheEngine:
     """Provides a cache with TTL support and optional custom backends.
@@ -147,7 +150,7 @@ class CacheEngine:
 
     @property
     def size(self) -> int:
-        return self._backend.size
+        return self._backend.count_for_prefix(f"{self.namespace}:")
 
     def _prefixed(self, key: str) -> str:
         return f"{self.namespace}:{key}"

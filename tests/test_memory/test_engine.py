@@ -63,6 +63,19 @@ class TestMemoryEngine:
         assert await engine_b.retrieve("k2") == "v2"
 
     @pytest.mark.asyncio
+    async def test_size_counts_only_own_namespace(self):
+        from ledgerloop.memory.engine import InMemoryBackend
+
+        backend = InMemoryBackend()
+        engine_a = MemoryEngine(namespace="a", backend=backend)
+        engine_b = MemoryEngine(namespace="b", backend=backend)
+        await engine_a.store("k1", "v1")
+        await engine_a.store("k2", "v2")
+        await engine_b.store("k3", "v3")
+        assert engine_a.size == 2
+        assert engine_b.size == 1
+
+    @pytest.mark.asyncio
     async def test_namespace_isolation(self):
         engine_a = MemoryEngine(namespace="a")
         engine_b = MemoryEngine(namespace="b")
@@ -144,6 +157,9 @@ class TestMemoryEngine:
             @property
             def size(self):
                 return len(self._data)
+
+            def count_for_prefix(self, prefix: str) -> int:
+                return sum(1 for k in self._data if k.startswith(prefix))
 
         backend = DictBackend()
         engine = MemoryEngine(namespace="custom", backend=backend)

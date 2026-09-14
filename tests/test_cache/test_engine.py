@@ -43,6 +43,17 @@ class TestCacheEngine:
         assert engine.size == 0
 
     @pytest.mark.asyncio
+    async def test_size_counts_only_own_namespace(self):
+        backend = InMemoryCache()
+        engine_a = CacheEngine(namespace="a", backend=backend)
+        engine_b = CacheEngine(namespace="b", backend=backend)
+        await engine_a.set("k1", "v1")
+        await engine_a.set("k2", "v2")
+        await engine_b.set("k3", "v3")
+        assert engine_a.size == 2
+        assert engine_b.size == 1
+
+    @pytest.mark.asyncio
     async def test_clear_only_clears_own_namespace(self):
         backend = InMemoryCache()
         engine_a = CacheEngine(namespace="a", backend=backend)
@@ -162,6 +173,9 @@ class TestCacheEngine:
             @property
             def size(self):
                 return len(self._data)
+
+            def count_for_prefix(self, prefix: str) -> int:
+                return sum(1 for k in self._data if k.startswith(prefix))
 
         backend = DictBackend()
         engine = CacheEngine(namespace="custom", backend=backend)
