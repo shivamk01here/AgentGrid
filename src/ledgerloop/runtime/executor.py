@@ -226,6 +226,12 @@ class ActionExecutor:
         self, action: Action, *, run_id: RunId, tenant_id: TenantId
     ) -> ExecutionOutcome:
         """Dispatch an action that moves no value, without a claim."""
+        await self._write(
+            run_id,
+            tenant_id,
+            LedgerEventType.ACTION_DISPATCHED,
+            _describe(action),
+        )
         try:
             receipt = await self._dispatcher.dispatch(action, at=self._clock.now())
         except LedgerloopError as exc:
