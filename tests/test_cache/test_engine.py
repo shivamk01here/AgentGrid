@@ -144,6 +144,10 @@ class TestCacheEngine:
         assert await engine_a.get("key") == "value_a"
         assert await engine_b.get("key") == "value_b"
 
+    def test_namespace_rejects_colon(self):
+        with pytest.raises(ValueError, match="namespace cannot contain ':'"):
+            CacheEngine(namespace="a:b")
+
     @pytest.mark.asyncio
     async def test_custom_backend(self):
         class DictBackend:

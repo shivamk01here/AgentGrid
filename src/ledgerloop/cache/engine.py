@@ -61,6 +61,8 @@ class CacheEngine:
         namespace: str = "default",
         backend: CacheBackend | None = None,
     ) -> None:
+        if ":" in namespace:
+            raise ValueError("namespace cannot contain ':' - it separates namespace from key")
         self.namespace = namespace
         self._backend: CacheBackend = backend or InMemoryCache()
 
