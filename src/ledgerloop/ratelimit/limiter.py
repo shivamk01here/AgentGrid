@@ -89,8 +89,7 @@ class RateLimiter:
                 self._buckets[key].reset()
                 self._stats[key] = {"allowed": 0, "denied": 0}
         else:
-            for bucket in self._buckets.values():
-                bucket.reset()
+            self._buckets.clear()
             self._stats.clear()
 
     def __repr__(self) -> str:
