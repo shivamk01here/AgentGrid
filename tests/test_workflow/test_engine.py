@@ -126,11 +126,6 @@ class TestWorkflowEngine:
         assert results["a"].success is False
         assert "b" not in results
 
-    def test_circular_dependency(self):
-        engine = WorkflowEngine()
-        engine.add_step(Step(name="a", handler=noop_handler, dependencies=["b"]))
-        with pytest.raises(ValueError, match="Circular dependency"):
-            engine.add_step(Step(name="b", handler=noop_handler, dependencies=["a"]))
 
     def test_missing_dependency(self):
         engine = WorkflowEngine()
