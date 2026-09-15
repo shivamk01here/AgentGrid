@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool
 
 
 class TestDateTimeTool:
@@ -143,3 +143,25 @@ class TestBase64Tool:
         result = await tool.execute(text="hello", action="rotate")
         assert result.success is False
         assert "Unknown action" in result.error
+
+class TestHashTool:
+    @pytest.mark.asyncio
+    async def test_sha256(self):
+        tool = HashTool()
+        result = await tool.execute(text="hello", algorithm="sha256")
+        assert result.success is True
+        assert result.output == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+    @pytest.mark.asyncio
+    async def test_md5(self):
+        tool = HashTool()
+        result = await tool.execute(text="hello", algorithm="md5")
+        assert result.success is True
+        assert result.output == "5d41402abc4b2a76b9719d911017c592"
+
+    @pytest.mark.asyncio
+    async def test_unknown_algorithm(self):
+        tool = HashTool()
+        result = await tool.execute(text="hello", algorithm="sha1")
+        assert result.success is False
+        assert "Unknown algorithm" in result.error
