@@ -197,3 +197,43 @@ class Base64Tool(BaseTool):
             return ToolResult.fail("Unknown action. Choose from: encode, decode")
 
         return ToolResult.ok(output, action=action)
+
+import hashlib
+
+class HashTool(BaseTool):
+    """Computes cryptographic hashes of text."""
+
+    @property
+    def name(self) -> str:
+        return "hash"
+
+    @property
+    def description(self) -> str:
+        return "Compute SHA256 or MD5 hash of text"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input text"},
+                "algorithm": {
+                    "type": "string",
+                    "description": "One of: sha256, md5",
+                },
+            },
+            "required": ["text", "algorithm"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        algorithm = kwargs["algorithm"]
+        
+        if algorithm == "sha256":
+            output = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        elif algorithm == "md5":
+            output = hashlib.md5(text.encode("utf-8")).hexdigest()
+        else:
+            return ToolResult.fail("Unknown algorithm. Choose from: sha256, md5")
+
+        return ToolResult.ok(output, algorithm=algorithm)
