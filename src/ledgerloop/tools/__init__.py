@@ -6,6 +6,7 @@ from ledgerloop.tools.builtins import (
     TextTransformTool,
     Base64Tool,
     HashTool,
+    UUIDTool,
 )
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "TextTransformTool",
     "Base64Tool",
     "HashTool",
+    "UUIDTool",
 ]

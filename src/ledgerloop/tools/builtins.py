@@ -237,3 +237,27 @@ class HashTool(BaseTool):
             return ToolResult.fail("Unknown algorithm. Choose from: sha256, md5")
 
         return ToolResult.ok(output, algorithm=algorithm)
+
+import uuid
+
+class UUIDTool(BaseTool):
+    """Generates UUIDs."""
+
+    @property
+    def name(self) -> str:
+        return "uuid"
+
+    @property
+    def description(self) -> str:
+        return "Generate a random UUID version 4"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {},
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        output = str(uuid.uuid4())
+        return ToolResult.ok(output)
