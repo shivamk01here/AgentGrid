@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool
 
 
 class TestDateTimeTool:
@@ -165,3 +165,12 @@ class TestHashTool:
         result = await tool.execute(text="hello", algorithm="sha1")
         assert result.success is False
         assert "Unknown algorithm" in result.error
+
+class TestUUIDTool:
+    @pytest.mark.asyncio
+    async def test_generate(self):
+        tool = UUIDTool()
+        result = await tool.execute()
+        assert result.success is True
+        assert len(result.output) == 36
+        assert "-" in result.output
