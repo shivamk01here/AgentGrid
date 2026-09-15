@@ -261,3 +261,53 @@ class UUIDTool(BaseTool):
     async def execute(self, **kwargs: Any) -> ToolResult:
         output = str(uuid.uuid4())
         return ToolResult.ok(output)
+
+import operator
+
+class MathTool(BaseTool):
+    """Performs basic arithmetic operations."""
+
+    @property
+    def name(self) -> str:
+        return "math"
+
+    @property
+    def description(self) -> str:
+        return "Basic arithmetic operations (add, subtract, multiply, divide)"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "a": {"type": "number", "description": "First operand"},
+                "b": {"type": "number", "description": "Second operand"},
+                "operation": {
+                    "type": "string",
+                    "description": "One of: add, subtract, multiply, divide",
+                },
+            },
+            "required": ["a", "b", "operation"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        a = kwargs["a"]
+        b = kwargs["b"]
+        operation = kwargs["operation"]
+        
+        ops = {
+            "add": operator.add,
+            "subtract": operator.sub,
+            "multiply": operator.mul,
+            "divide": operator.truediv,
+        }
+
+        fn = ops.get(operation)
+        if fn is None:
+            return ToolResult.fail("Unknown operation. Choose from: add, subtract, multiply, divide")
+
+        if operation == "divide" and b == 0:
+            return ToolResult.fail("Division by zero")
+
+        output = fn(a, b)
+        return ToolResult.ok(output, operation=operation)
