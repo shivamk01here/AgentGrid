@@ -43,10 +43,10 @@ class InMemoryBackend:
 
     @property
     def size(self) -> int:
-        return len(self._store)
+        return sum(1 for e in self._store.values() if not e.is_expired())
 
     def count_for_prefix(self, prefix: str) -> int:
-        return sum(1 for k in self._store if k.startswith(prefix))
+        return sum(1 for k, e in self._store.items() if k.startswith(prefix) and not e.is_expired())
 
 
 class MemoryEngine:
