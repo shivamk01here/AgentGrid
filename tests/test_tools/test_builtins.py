@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool
 
 
 class TestDateTimeTool:
@@ -114,3 +114,32 @@ class TestCounterTool:
         await tool.execute(counter_name="a", action="increment", amount=3)
         await tool.execute(counter_name="b", action="increment", amount=7)
         assert tool.counters == {"a": 3, "b": 7}
+
+class TestBase64Tool:
+    @pytest.mark.asyncio
+    async def test_encode(self):
+        tool = Base64Tool()
+        result = await tool.execute(text="hello world", action="encode")
+        assert result.success is True
+        assert result.output == "aGVsbG8gd29ybGQ="
+
+    @pytest.mark.asyncio
+    async def test_decode(self):
+        tool = Base64Tool()
+        result = await tool.execute(text="aGVsbG8gd29ybGQ=", action="decode")
+        assert result.success is True
+        assert result.output == "hello world"
+
+    @pytest.mark.asyncio
+    async def test_decode_error(self):
+        tool = Base64Tool()
+        result = await tool.execute(text="invalid_base64!", action="decode")
+        assert result.success is False
+        assert "Decode error" in result.error
+
+    @pytest.mark.asyncio
+    async def test_unknown_action(self):
+        tool = Base64Tool()
+        result = await tool.execute(text="hello", action="rotate")
+        assert result.success is False
+        assert "Unknown action" in result.error
