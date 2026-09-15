@@ -1,6 +1,11 @@
 from ledgerloop.tools.registry import ToolRegistry
 from ledgerloop.tools.base import BaseTool, ToolResult
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool
+from ledgerloop.tools.builtins import (
+    CounterTool,
+    DateTimeTool,
+    TextTransformTool,
+    Base64Tool,
+)
 
 __all__ = [
     "ToolRegistry",
@@ -9,4 +14,5 @@ __all__ = [
     "CounterTool",
     "DateTimeTool",
     "TextTransformTool",
+    "Base64Tool",
 ]

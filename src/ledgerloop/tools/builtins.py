@@ -155,3 +155,45 @@ class CounterTool(BaseTool):
     def counters(self) -> dict[str, int]:
         """Read-only view of all counter values."""
         return dict(self._counters)
+import base64
+
+class Base64Tool(BaseTool):
+    """Encodes or decodes text using Base64."""
+
+    @property
+    def name(self) -> str:
+        return "base64"
+
+    @property
+    def description(self) -> str:
+        return "Base64 encode or decode text"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input text"},
+                "action": {
+                    "type": "string",
+                    "description": "One of: encode, decode",
+                },
+            },
+            "required": ["text", "action"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        action = kwargs["action"]
+        
+        if action == "encode":
+            output = base64.b64encode(text.encode("utf-8")).decode("ascii")
+        elif action == "decode":
+            try:
+                output = base64.b64decode(text.encode("ascii")).decode("utf-8")
+            except Exception as exc:
+                return ToolResult.fail(f"Decode error: {exc}")
+        else:
+            return ToolResult.fail("Unknown action. Choose from: encode, decode")
+
+        return ToolResult.ok(output, action=action)
