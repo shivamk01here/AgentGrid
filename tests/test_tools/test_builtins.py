@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool
 
 
 class TestDateTimeTool:
@@ -174,3 +174,46 @@ class TestUUIDTool:
         assert result.success is True
         assert len(result.output) == 36
         assert "-" in result.output
+
+class TestMathTool:
+    @pytest.mark.asyncio
+    async def test_add(self):
+        tool = MathTool()
+        result = await tool.execute(a=5, b=3, operation="add")
+        assert result.success is True
+        assert result.output == 8
+
+    @pytest.mark.asyncio
+    async def test_subtract(self):
+        tool = MathTool()
+        result = await tool.execute(a=5, b=3, operation="subtract")
+        assert result.success is True
+        assert result.output == 2
+
+    @pytest.mark.asyncio
+    async def test_multiply(self):
+        tool = MathTool()
+        result = await tool.execute(a=5, b=3, operation="multiply")
+        assert result.success is True
+        assert result.output == 15
+
+    @pytest.mark.asyncio
+    async def test_divide(self):
+        tool = MathTool()
+        result = await tool.execute(a=6, b=3, operation="divide")
+        assert result.success is True
+        assert result.output == 2.0
+
+    @pytest.mark.asyncio
+    async def test_divide_by_zero(self):
+        tool = MathTool()
+        result = await tool.execute(a=6, b=0, operation="divide")
+        assert result.success is False
+        assert "Division by zero" in result.error
+
+    @pytest.mark.asyncio
+    async def test_unknown_operation(self):
+        tool = MathTool()
+        result = await tool.execute(a=6, b=3, operation="power")
+        assert result.success is False
+        assert "Unknown operation" in result.error
