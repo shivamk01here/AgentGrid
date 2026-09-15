@@ -54,6 +54,7 @@ class Step:
         last_error: str | None = None
         attempts = self.retry_count + 1
 
+        total_duration = 0.0
         for _ in range(attempts):
             start = time.monotonic()
             try:
@@ -64,12 +65,15 @@ class Step:
                 else:
                     output = await self.handler(self, context)
                 duration = (time.monotonic() - start) * 1000
-                return StepResult.ok(self.name, output, duration)
+                total_duration += duration
+                return StepResult.ok(self.name, output, total_duration)
             except asyncio.TimeoutError:
                 duration = (time.monotonic() - start) * 1000
+                total_duration += duration
                 last_error = f"Step timed out after {self.timeout_seconds}s"
             except Exception as exc:
                 duration = (time.monotonic() - start) * 1000
+                total_duration += duration
                 last_error = str(exc)
 
-        return StepResult.fail(self.name, last_error or "Unknown error")
+        return StepResult.fail(self.name, last_error or "Unknown error", total_duration)
