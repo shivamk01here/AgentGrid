@@ -91,13 +91,18 @@ class WorkflowEngine:
         """Topological sort of steps based on dependencies."""
         resolved: list[str] = []
         visited: set[str] = set()
+        visiting: set[str] = set()
 
         def dfs(name: str) -> None:
+            if name in visiting:
+                raise ValueError(f"Cycle detected involving step '{name}'")
             if name in visited:
                 return
+            visiting.add(name)
             step = self._steps[name]
             for dep in step.dependencies:
                 dfs(dep)
+            visiting.remove(name)
             visited.add(name)
             resolved.append(name)
 
