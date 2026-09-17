@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool
 
 
 class TestDateTimeTool:
@@ -290,3 +290,23 @@ class TestHttpTool:
             
         assert result.success is False
         assert "Not found" in result.error
+
+class TestSleepTool:
+    @pytest.mark.asyncio
+    async def test_sleep_success(self):
+        tool = SleepTool()
+        # Mock asyncio.sleep to not actually wait
+        with patch('asyncio.sleep', new_callable=MagicMock) as mock_sleep:
+            result = await tool.execute(seconds=2.5)
+            mock_sleep.assert_called_once_with(2.5)
+            assert result.success is True
+            assert "2.5" in result.output
+
+    @pytest.mark.asyncio
+    async def test_sleep_limits(self):
+        tool = SleepTool()
+        result = await tool.execute(seconds=-1)
+        assert result.success is False
+        
+        result = await tool.execute(seconds=100)
+        assert result.success is False
