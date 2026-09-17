@@ -1,6 +1,7 @@
 """LLM providers - the model boundary for Ledgerloop agents."""
 
 from ledgerloop.llm.anthropic_provider import DEFAULT_MODEL, AnthropicProvider
+from ledgerloop.llm.openai_provider import OpenAIProvider
 from ledgerloop.llm.provider import (
     LLMError,
     LLMProvider,
@@ -15,6 +16,7 @@ __all__ = [
     "LLMError",
     "LLMProvider",
     "LLMResponse",
+    "OpenAIProvider",
     "TokenUsage",
     "ToolCall",
 ]
