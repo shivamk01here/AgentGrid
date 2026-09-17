@@ -11,6 +11,7 @@ from ledgerloop.tools.builtins import (
     RegexTool,
     JsonPathTool,
     HttpTool,
+    SleepTool,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "RegexTool",
     "JsonPathTool",
     "HttpTool",
+    "SleepTool",
 ]

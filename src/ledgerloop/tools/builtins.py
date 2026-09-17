@@ -441,3 +441,36 @@ class HttpTool(BaseTool):
             return ToolResult.ok(content)
         except Exception as e:
             return ToolResult.fail(str(e))
+
+class SleepTool(BaseTool):
+    """Pauses agent execution for a duration."""
+
+    @property
+    def name(self) -> str:
+        return "sleep"
+
+    @property
+    def description(self) -> str:
+        return "Pause execution for a specified number of seconds"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "seconds": {"type": "number", "description": "Seconds to sleep (max 60)"},
+            },
+            "required": ["seconds"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        seconds = kwargs["seconds"]
+        if not isinstance(seconds, (int, float)):
+            return ToolResult.fail("seconds must be a number")
+        if seconds < 0:
+            return ToolResult.fail("Cannot sleep for a negative duration")
+        if seconds > 60:
+            return ToolResult.fail("Cannot sleep for more than 60 seconds")
+            
+        await asyncio.sleep(seconds)
+        return ToolResult.ok(f"Slept for {seconds} seconds")
