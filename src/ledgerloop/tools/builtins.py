@@ -390,3 +390,54 @@ class JsonPathTool(BaseTool):
             return ToolResult.fail(f"Key '{key}' not found in JSON object")
 
         return ToolResult.ok(parsed[key])
+
+import urllib.request
+import urllib.error
+
+class HttpTool(BaseTool):
+    """Fetches text content from URLs."""
+
+    @property
+    def name(self) -> str:
+        return "http_fetch"
+
+    @property
+    def description(self) -> str:
+        return "Fetch text content from a URL via HTTP GET"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The URL to fetch"},
+                "timeout": {"type": "number", "description": "Timeout in seconds (default 10)"},
+            },
+            "required": ["url"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        url = kwargs["url"]
+        timeout = kwargs.get("timeout", 10.0)
+        
+        # Run synchronous urlopen in a thread to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        
+        def _fetch():
+            req = urllib.request.Request(
+                url, 
+                headers={'User-Agent': 'Ledgerloop-Agent/1.0'}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as response:
+                    return response.read().decode('utf-8')
+            except urllib.error.URLError as e:
+                raise RuntimeError(f"Failed to fetch {url}: {e.reason}")
+            except Exception as e:
+                raise RuntimeError(f"Error fetching {url}: {e}")
+
+        try:
+            content = await loop.run_in_executor(None, _fetch)
+            return ToolResult.ok(content)
+        except Exception as e:
+            return ToolResult.fail(str(e))
