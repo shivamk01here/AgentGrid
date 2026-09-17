@@ -311,3 +311,39 @@ class MathTool(BaseTool):
 
         output = fn(a, b)
         return ToolResult.ok(output, operation=operation)
+
+import re
+
+class RegexTool(BaseTool):
+    """Matches regular expressions against text."""
+
+    @property
+    def name(self) -> str:
+        return "regex"
+
+    @property
+    def description(self) -> str:
+        return "Find all matches of a regular expression pattern in text"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input text"},
+                "pattern": {"type": "string", "description": "The regex pattern to match"},
+            },
+            "required": ["text", "pattern"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        pattern = kwargs["pattern"]
+        
+        try:
+            compiled = re.compile(pattern)
+        except re.error as exc:
+            return ToolResult.fail(f"Invalid regex pattern: {exc}")
+
+        matches = compiled.findall(text)
+        return ToolResult.ok(matches, pattern=pattern)
