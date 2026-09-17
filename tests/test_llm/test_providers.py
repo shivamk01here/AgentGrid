@@ -101,3 +101,104 @@ def test_openai_build_tool_result_messages():
     assert len(msgs) == 2
     assert msgs[0] == {"role": "tool", "tool_call_id": "call_123", "content": "Sunny"}
     assert msgs[1] == {"role": "tool", "tool_call_id": "call_456", "content": "Error!"}
+
+class MockAnthropicMessage:
+    def __init__(self, content, stop_reason, usage):
+        self.content = content
+        self.stop_reason = stop_reason
+        self.usage = usage
+
+class MockAnthropicStream:
+    def __init__(self, message):
+        self.message = message
+        
+    async def __aenter__(self):
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+        
+    async def get_final_message(self):
+        return self.message
+
+class MockAnthropicMessages:
+    def __init__(self, message_to_return):
+        self.message_to_return = message_to_return
+        self.last_kwargs = None
+        
+    def stream(self, **kwargs):
+        self.last_kwargs = kwargs
+        return MockAnthropicStream(self.message_to_return)
+
+class MockAsyncAnthropic:
+    def __init__(self, message_to_return):
+        self.messages = MockAnthropicMessages(message_to_return)
+
+class MockAnthropicBlock:
+    def __init__(self, type_name, text="", thinking="", id="", name="", input=None):
+        self.type = type_name
+        self.text = text
+        self.thinking = thinking
+        self.id = id
+        self.name = name
+        self.input = input or {}
+
+class MockUsage:
+    def __init__(self, input_tokens=10, output_tokens=20, cache_read_input_tokens=0, cache_creation_input_tokens=0):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cache_read_input_tokens = cache_read_input_tokens
+        self.cache_creation_input_tokens = cache_creation_input_tokens
+
+class TestAnthropicProvider:
+    @pytest.mark.asyncio
+    async def test_complete_text_only(self):
+        from ledgerloop.llm.anthropic_provider import AnthropicProvider
+        
+        block = MockAnthropicBlock(type_name="text", text="Hello world")
+        message = MockAnthropicMessage(content=[block], stop_reason="end_turn", usage=MockUsage())
+        
+        client = MockAsyncAnthropic(message)
+        provider = AnthropicProvider(client=client)
+        
+        response = await provider.complete(
+            system="System prompt",
+            messages=[{"role": "user", "content": "Hi"}],
+        )
+        
+        assert response.text == "Hello world"
+        assert not response.tool_calls
+        assert response.stop_reason == "end_turn"
+        assert client.messages.last_kwargs["model"] == "claude-opus-5"
+        assert client.messages.last_kwargs["system"][0]["text"] == "System prompt"
+
+    @pytest.mark.asyncio
+    async def test_complete_with_tool_call_and_thinking(self):
+        from ledgerloop.llm.anthropic_provider import AnthropicProvider
+        
+        thinking_block = MockAnthropicBlock(type_name="thinking", thinking="I should use the tool")
+        tool_block = MockAnthropicBlock(type_name="tool_use", id="call_1", name="my_tool", input={"arg1": "val1"})
+        
+        message = MockAnthropicMessage(
+            content=[thinking_block, tool_block],
+            stop_reason="tool_use",
+            usage=MockUsage()
+        )
+        
+        client = MockAsyncAnthropic(message)
+        provider = AnthropicProvider(client=client)
+        
+        response = await provider.complete(
+            system="",
+            messages=[{"role": "user", "content": "Do it"}],
+            tools=[{"name": "my_tool", "description": "Does something"}]
+        )
+        
+        assert response.reasoning == "I should use the tool"
+        assert len(response.tool_calls) == 1
+        assert response.tool_calls[0].name == "my_tool"
+        assert response.tool_calls[0].arguments == {"arg1": "val1"}
+        assert response.stop_reason == "tool_use"
+        
+        assert "tools" in client.messages.last_kwargs
+        assert len(client.messages.last_kwargs["tools"]) == 1
