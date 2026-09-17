@@ -72,9 +72,7 @@ class WorkflowEngine:
         )
 
         for step_name in self._execution_order:
-            step = self._steps.get(step_name)
-            if step is None:
-                continue
+            step = self._steps[step_name]
 
             step_result = await step.execute(context)
             results[step_name] = step_result
