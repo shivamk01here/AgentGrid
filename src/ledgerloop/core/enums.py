@@ -90,7 +90,7 @@ class RunState(StrEnum):
     @property
     def is_resumable(self) -> bool:
         """True when a resume request could legally restart this run."""
-        return self in (RunState.PENDING, RunState.AWAITING_APPROVAL, RunState.SUSPENDED)
+        return self in (RunState.AWAITING_APPROVAL, RunState.SUSPENDED)
 
 
 _TERMINAL_RUN_STATES = frozenset(
