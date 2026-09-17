@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool
 
 
 class TestDateTimeTool:
@@ -261,3 +261,32 @@ class TestJsonPathTool:
         result = await tool.execute(json_string='{status: "ok"}', key="status")
         assert result.success is False
         assert "Invalid JSON" in result.error
+
+import io
+from unittest.mock import patch, MagicMock
+
+class TestHttpTool:
+    @pytest.mark.asyncio
+    async def test_fetch_success(self):
+        tool = HttpTool()
+        
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"Hello from the web"
+        mock_response.__enter__.return_value = mock_response
+        
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            result = await tool.execute(url="http://example.com")
+            
+        assert result.success is True
+        assert result.output == "Hello from the web"
+
+    @pytest.mark.asyncio
+    async def test_fetch_failure(self):
+        import urllib.error
+        tool = HttpTool()
+        
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Not found")):
+            result = await tool.execute(url="http://example.com/bad")
+            
+        assert result.success is False
+        assert "Not found" in result.error
