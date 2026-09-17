@@ -161,3 +161,23 @@ class TestWorkflowEngine:
         engine.add_step(Step(name="b", handler=noop_handler, dependencies=["a"]))
         with pytest.raises(ValueError, match="depended on"):
             engine.remove_step("a")
+
+def test_cycle_detection():
+    engine = WorkflowEngine()
+    
+    async def dummy(step, ctx):
+        return "ok"
+        
+    step_a = Step(name="A", handler=dummy)
+    engine.add_step(step_a)
+    
+    step_b = Step(name="B", handler=dummy, dependencies=["A"])
+    engine.add_step(step_b)
+    
+    # Mutate to create a cycle
+    step_a.dependencies.append("B")
+    
+    # Trigger a rebuild of the execution order
+    step_c = Step(name="C", handler=dummy)
+    with pytest.raises(ValueError, match="Cycle detected"):
+        engine.add_step(step_c)
