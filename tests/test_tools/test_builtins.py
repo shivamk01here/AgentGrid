@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool
 
 
 class TestDateTimeTool:
@@ -239,3 +239,25 @@ class TestRegexTool:
         result = await tool.execute(text="hello", pattern="[unclosed")
         assert result.success is False
         assert "Invalid regex pattern" in result.error
+
+class TestJsonPathTool:
+    @pytest.mark.asyncio
+    async def test_extract(self):
+        tool = JsonPathTool()
+        result = await tool.execute(json_string='{"status": "ok", "value": 42}', key="value")
+        assert result.success is True
+        assert result.output == 42
+
+    @pytest.mark.asyncio
+    async def test_missing_key(self):
+        tool = JsonPathTool()
+        result = await tool.execute(json_string='{"status": "ok"}', key="value")
+        assert result.success is False
+        assert "not found" in result.error
+
+    @pytest.mark.asyncio
+    async def test_invalid_json(self):
+        tool = JsonPathTool()
+        result = await tool.execute(json_string='{status: "ok"}', key="status")
+        assert result.success is False
+        assert "Invalid JSON" in result.error
