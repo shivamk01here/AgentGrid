@@ -9,6 +9,7 @@ from ledgerloop.tools.builtins import (
     UUIDTool,
     MathTool,
     RegexTool,
+    JsonPathTool,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "UUIDTool",
     "MathTool",
     "RegexTool",
+    "JsonPathTool",
 ]

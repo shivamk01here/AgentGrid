@@ -347,3 +347,46 @@ class RegexTool(BaseTool):
 
         matches = compiled.findall(text)
         return ToolResult.ok(matches, pattern=pattern)
+
+import json
+
+class JsonPathTool(BaseTool):
+    """Extracts values from JSON strings."""
+
+    @property
+    def name(self) -> str:
+        return "json_extract"
+
+    @property
+    def description(self) -> str:
+        return "Extract a specific key from a JSON object string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "json_string": {"type": "string", "description": "The JSON string"},
+                "key": {"type": "string", "description": "The top-level key to extract"},
+            },
+            "required": ["json_string", "key"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        json_string = kwargs["json_string"]
+        key = kwargs["key"]
+        
+        try:
+            parsed = json.loads(json_string)
+        except json.JSONDecodeError as exc:
+            return ToolResult.fail(f"Invalid JSON string: {exc}")
+        except TypeError:
+            return ToolResult.fail("Invalid input type for JSON parsing")
+
+        if not isinstance(parsed, dict):
+            return ToolResult.fail("Parsed JSON is not an object")
+
+        if key not in parsed:
+            return ToolResult.fail(f"Key '{key}' not found in JSON object")
+
+        return ToolResult.ok(parsed[key])
