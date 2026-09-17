@@ -148,8 +148,8 @@ class AgentLoop:
             invocations = await self._run_tools(response.tool_calls)
             steps.append(self._step(index, response, invocations))
 
-            messages.append(
-                provider.build_tool_result_message(
+            messages.extend(
+                provider.build_tool_result_messages(
                     [
                         (inv.call_id, self._render(inv), not inv.success)
                         for inv in invocations

@@ -124,16 +124,16 @@ class LLMProvider(Protocol):
         """
         ...
 
-    def build_tool_result_message(
+    def build_tool_result_messages(
         self, results: list[tuple[str, str, bool]]
-    ) -> Any:
-        """Pack executed tool results into one provider-native user turn.
+    ) -> list[Any]:
+        """Pack executed tool results into provider-native turns.
 
         Args:
             results: One `(tool_call_id, content, is_error)` per call the model
                 made this turn - all of them, including failures.
 
         Returns:
-            A single message to append to the transcript.
+            A list of messages to append to the transcript.
         """
         ...

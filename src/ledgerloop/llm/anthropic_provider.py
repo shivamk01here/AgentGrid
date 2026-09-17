@@ -95,26 +95,28 @@ class AnthropicProvider:
 
         return self._to_response(message)
 
-    def build_tool_result_message(
+    def build_tool_result_messages(
         self, results: list[tuple[str, str, bool]]
-    ) -> dict[str, Any]:
+    ) -> list[Any]:
         """Pack every tool result into one user message.
 
         All results for a turn must travel together - splitting them across
         messages teaches the model to stop requesting calls in parallel.
         """
-        return {
-            "role": "user",
-            "content": [
-                {
-                    "type": "tool_result",
-                    "tool_use_id": call_id,
-                    "content": content,
-                    "is_error": is_error,
-                }
-                for call_id, content, is_error in results
-            ],
-        }
+        return [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": call_id,
+                        "content": content,
+                        "is_error": is_error,
+                    }
+                    for call_id, content, is_error in results
+                ],
+            }
+        ]
 
     @staticmethod
     def _to_anthropic_tool(tool: dict[str, Any]) -> dict[str, Any]:
