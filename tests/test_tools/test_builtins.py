@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool
 
 
 class TestDateTimeTool:
@@ -217,3 +217,25 @@ class TestMathTool:
         result = await tool.execute(a=6, b=3, operation="power")
         assert result.success is False
         assert "Unknown operation" in result.error
+
+class TestRegexTool:
+    @pytest.mark.asyncio
+    async def test_match(self):
+        tool = RegexTool()
+        result = await tool.execute(text="The quick brown fox jumps over 42 dogs", pattern="\\d+")
+        assert result.success is True
+        assert result.output == ["42"]
+
+    @pytest.mark.asyncio
+    async def test_no_match(self):
+        tool = RegexTool()
+        result = await tool.execute(text="hello world", pattern="[0-9]+")
+        assert result.success is True
+        assert result.output == []
+
+    @pytest.mark.asyncio
+    async def test_invalid_pattern(self):
+        tool = RegexTool()
+        result = await tool.execute(text="hello", pattern="[unclosed")
+        assert result.success is False
+        assert "Invalid regex pattern" in result.error
