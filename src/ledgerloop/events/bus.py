@@ -100,6 +100,16 @@ class EventBus:
             return True
         pattern_parts = pattern.split(".")
         topic_parts = topic.split(".")
+        
+        # If the pattern ends with '*', it matches any suffix
+        if pattern_parts and pattern_parts[-1] == "*":
+            if len(topic_parts) < len(pattern_parts) - 1:
+                return False
+            for p, t in zip(pattern_parts[:-1], topic_parts):
+                if p != "*" and p != t:
+                    return False
+            return True
+
         if len(pattern_parts) != len(topic_parts):
             return False
         return all(
