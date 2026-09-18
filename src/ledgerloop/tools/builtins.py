@@ -474,3 +474,30 @@ class SleepTool(BaseTool):
             
         await asyncio.sleep(seconds)
         return ToolResult.ok(f"Slept for {seconds} seconds")
+
+class StringLengthTool(BaseTool):
+    """Calculates the length of a string."""
+
+    @property
+    def name(self) -> str:
+        return "string_length"
+
+    @property
+    def description(self) -> str:
+        return "Calculate the length of a given text string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to measure"},
+            },
+            "required": ["text"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        return ToolResult.ok(len(text))
