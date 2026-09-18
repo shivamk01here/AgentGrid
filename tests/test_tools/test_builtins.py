@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool
 
 
 class TestDateTimeTool:
@@ -336,5 +336,19 @@ class TestUrlEncodeTool:
     @pytest.mark.asyncio
     async def test_encode_invalid_input(self):
         tool = UrlEncodeTool()
+        result = await tool.execute(text=123)
+        assert result.success is False
+
+class TestUrlDecodeTool:
+    @pytest.mark.asyncio
+    async def test_decode_success(self):
+        tool = UrlDecodeTool()
+        result = await tool.execute(text="hello%20world%2Ffoo")
+        assert result.success is True
+        assert result.output == "hello world/foo"
+        
+    @pytest.mark.asyncio
+    async def test_decode_invalid_input(self):
+        tool = UrlDecodeTool()
         result = await tool.execute(text=123)
         assert result.success is False
