@@ -55,6 +55,8 @@ class ReconciliationReport:
     checked: int = 0
     confirmed: int = 0
     """Provider says it happened. Claim settled as succeeded."""
+    failed: int = 0
+    """Provider says it failed. Claim settled as failed."""
     not_found: int = 0
     """Provider never saw it. Claim settled as failed."""
     unresolved: int = 0
@@ -62,12 +64,13 @@ class ReconciliationReport:
 
     @property
     def resolved(self) -> int:
-        return self.confirmed + self.not_found
+        return self.confirmed + self.failed + self.not_found
 
     def __str__(self) -> str:
         return (
             f"checked={self.checked} confirmed={self.confirmed} "
-            f"not_found={self.not_found} unresolved={self.unresolved}"
+            f"failed={self.failed} not_found={self.not_found} "
+            f"unresolved={self.unresolved}"
         )
 
 
@@ -111,21 +114,24 @@ class Reconciler:
             falls is an alert, not a statistic.
         """
         cutoff = self._clock.now() - self._grace
-        checked = confirmed = not_found = unresolved = 0
+        checked = confirmed = failed = not_found = unresolved = 0
 
         async for record in self._idempotency.find_in_flight(older_than=cutoff, limit=limit):
             checked += 1
             outcome = await self._resolve(record)
-            if outcome is None:
+            if outcome == "unresolved":
                 unresolved += 1
-            elif outcome:
+            elif outcome == "confirmed":
                 confirmed += 1
-            else:
+            elif outcome == "failed":
+                failed += 1
+            elif outcome == "not_found":
                 not_found += 1
 
         report = ReconciliationReport(
             checked=checked,
             confirmed=confirmed,
+            failed=failed,
             not_found=not_found,
             unresolved=unresolved,
         )
@@ -133,26 +139,23 @@ class Reconciler:
             logger.info("Reconciliation sweep complete: %s", report)
         return report
 
-    async def _resolve(self, record: IdempotencyRecord) -> bool | None:
+    async def _resolve(self, record: IdempotencyRecord) -> str:
         """Resolve one record.
 
         Returns:
-            True when the provider confirmed the effect succeeded, False when
-            it never saw it or says it failed, and None when the lookup
-            itself failed - in which case the record stays in flight for the
-            next sweep. Leaving it open is correct: an unanswered question
-            must not become an answer.
+            A string indicating the resolution: "confirmed", "failed", 
+            "not_found", or "unresolved".
         """
         try:
             receipt = await self._lookup.lookup(record.key, record.tenant_id)
         except Exception as exc:
             logger.warning("Lookup failed for %s: %s", record.key, exc)
-            return None
+            return "unresolved"
 
         if receipt is None:
             if record.action_id is None:  # pragma: no cover - claims carry it
                 logger.warning("Claim %s has no action id; cannot settle it", record.key)
-                return None
+                return "unresolved"
             settled = ActionReceipt(
                 action_id=record.action_id,
                 state=IdempotencyState.FAILED,
@@ -160,17 +163,17 @@ class Reconciler:
                 settled_at=self._clock.now(),
             )
             await self._settle(record, settled, LedgerEventType.ACTION_FAILED)
-            return False
+            return "not_found"
 
         if receipt.succeeded:
             await self._settle(record, receipt, LedgerEventType.ACTION_SETTLED)
-            return True
+            return "confirmed"
 
         # The provider found the request and told us it failed. That is still
         # a resolution - the claim settles - but it is not a confirmation,
         # and it must not be ledgered as one.
         await self._settle(record, receipt, LedgerEventType.ACTION_FAILED)
-        return False
+        return "failed"
 
     async def _settle(
         self,

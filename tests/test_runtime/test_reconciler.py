@@ -148,7 +148,8 @@ class TestSweep:
         # The provider answered, so the claim resolves - but it resolves to
         # "this did not happen", and the counts have to say so.
         assert result.confirmed == 0
-        assert result.not_found == 1
+        assert result.failed == 1
+        assert result.not_found == 0
         assert result.resolved == 1
         record = await idempotency.get(action.idempotency_key, tenant)
         assert record.state is IdempotencyState.FAILED
