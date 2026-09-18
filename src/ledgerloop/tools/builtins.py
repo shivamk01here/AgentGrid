@@ -530,3 +530,30 @@ class UrlEncodeTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(urllib.parse.quote(text))
+
+class UrlDecodeTool(BaseTool):
+    """URL decodes a string."""
+
+    @property
+    def name(self) -> str:
+        return "url_decode"
+
+    @property
+    def description(self) -> str:
+        return "URL decode a given text string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to decode"},
+            },
+            "required": ["text"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        return ToolResult.ok(urllib.parse.unquote(text))

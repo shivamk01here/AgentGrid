@@ -14,6 +14,7 @@ from ledgerloop.tools.builtins import (
     SleepTool,
     StringLengthTool,
     UrlEncodeTool,
+    UrlDecodeTool,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "SleepTool",
     "StringLengthTool",
     "UrlEncodeTool",
+    "UrlDecodeTool",
 ]
