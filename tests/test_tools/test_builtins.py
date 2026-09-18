@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool
 
 
 class TestDateTimeTool:
@@ -309,4 +309,18 @@ class TestSleepTool:
         assert result.success is False
         
         result = await tool.execute(seconds=100)
+        assert result.success is False
+
+class TestStringLengthTool:
+    @pytest.mark.asyncio
+    async def test_length_success(self):
+        tool = StringLengthTool()
+        result = await tool.execute(text="hello")
+        assert result.success is True
+        assert result.output == 5
+        
+    @pytest.mark.asyncio
+    async def test_length_invalid_input(self):
+        tool = StringLengthTool()
+        result = await tool.execute(text=123)
         assert result.success is False
