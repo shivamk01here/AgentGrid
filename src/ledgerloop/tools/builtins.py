@@ -501,3 +501,32 @@ class StringLengthTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(len(text))
+
+import urllib.parse
+
+class UrlEncodeTool(BaseTool):
+    """URL encodes a string."""
+
+    @property
+    def name(self) -> str:
+        return "url_encode"
+
+    @property
+    def description(self) -> str:
+        return "URL encode a given text string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to encode"},
+            },
+            "required": ["text"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        return ToolResult.ok(urllib.parse.quote(text))

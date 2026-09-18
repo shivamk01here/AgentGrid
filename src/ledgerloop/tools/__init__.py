@@ -13,6 +13,7 @@ from ledgerloop.tools.builtins import (
     HttpTool,
     SleepTool,
     StringLengthTool,
+    UrlEncodeTool,
 )
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "HttpTool",
     "SleepTool",
     "StringLengthTool",
+    "UrlEncodeTool",
 ]
