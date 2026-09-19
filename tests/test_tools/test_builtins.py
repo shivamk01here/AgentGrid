@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool
 
 
 class TestDateTimeTool:
@@ -365,4 +365,18 @@ class TestRandomIntTool:
     async def test_random_invalid_input(self):
         tool = RandomIntTool()
         result = await tool.execute(min=10, max=1)
+        assert result.success is False
+
+class TestStringSplitTool:
+    @pytest.mark.asyncio
+    async def test_split_success(self):
+        tool = StringSplitTool()
+        result = await tool.execute(text="a,b,c", delimiter=",")
+        assert result.success is True
+        assert result.output == ["a", "b", "c"]
+        
+    @pytest.mark.asyncio
+    async def test_split_invalid_input(self):
+        tool = StringSplitTool()
+        result = await tool.execute(text=123, delimiter=",")
         assert result.success is False
