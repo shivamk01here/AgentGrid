@@ -780,3 +780,38 @@ class DictValuesTool(BaseTool):
             return ToolResult.fail("Parsed JSON is not an object")
 
         return ToolResult.ok(list(parsed.values()))
+
+class StringJoinTool(BaseTool):
+    """Joins a list of strings."""
+
+    @property
+    def name(self) -> str:
+        return "string_join"
+
+    @property
+    def description(self) -> str:
+        return "Join a list of strings using a delimiter"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "parts": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "The list of strings to join"
+                },
+                "delimiter": {"type": "string", "description": "The delimiter to join them with"},
+            },
+            "required": ["parts", "delimiter"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        parts = kwargs["parts"]
+        delimiter = kwargs["delimiter"]
+        if not isinstance(parts, list) or not all(isinstance(p, str) for p in parts):
+            return ToolResult.fail("parts must be a list of strings")
+        if not isinstance(delimiter, str):
+            return ToolResult.fail("delimiter must be a string")
+        return ToolResult.ok(delimiter.join(parts))
