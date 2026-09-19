@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool
 
 
 class TestDateTimeTool:
@@ -421,4 +421,18 @@ class TestStringTrimTool:
     async def test_trim_invalid_input(self):
         tool = StringTrimTool()
         result = await tool.execute(text=123)
+        assert result.success is False
+
+class TestDictKeysTool:
+    @pytest.mark.asyncio
+    async def test_keys_success(self):
+        tool = DictKeysTool()
+        result = await tool.execute(json_string='{"a": 1, "b": 2}')
+        assert result.success is True
+        assert result.output == ["a", "b"]
+        
+    @pytest.mark.asyncio
+    async def test_keys_invalid_input(self):
+        tool = DictKeysTool()
+        result = await tool.execute(json_string="[1, 2]")
         assert result.success is False
