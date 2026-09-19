@@ -619,3 +619,34 @@ class StringSplitTool(BaseTool):
         if not isinstance(text, str) or not isinstance(delimiter, str):
             return ToolResult.fail("text and delimiter must be strings")
         return ToolResult.ok(text.split(delimiter))
+
+class StringReplaceTool(BaseTool):
+    """Replaces occurrences of a substring."""
+
+    @property
+    def name(self) -> str:
+        return "string_replace"
+
+    @property
+    def description(self) -> str:
+        return "Replace all occurrences of a substring with a new string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input string"},
+                "old": {"type": "string", "description": "The substring to replace"},
+                "new": {"type": "string", "description": "The replacement string"},
+            },
+            "required": ["text", "old", "new"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        old = kwargs["old"]
+        new = kwargs["new"]
+        if not isinstance(text, str) or not isinstance(old, str) or not isinstance(new, str):
+            return ToolResult.fail("all arguments must be strings")
+        return ToolResult.ok(text.replace(old, new))

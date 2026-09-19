@@ -17,6 +17,7 @@ from ledgerloop.tools.builtins import (
     UrlDecodeTool,
     RandomIntTool,
     StringSplitTool,
+    StringReplaceTool,
 )
 
 __all__ = [
@@ -39,4 +40,5 @@ __all__ = [
     "UrlDecodeTool",
     "RandomIntTool",
     "StringSplitTool",
+    "StringReplaceTool",
 ]
