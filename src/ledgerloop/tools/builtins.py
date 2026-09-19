@@ -650,3 +650,34 @@ class StringReplaceTool(BaseTool):
         if not isinstance(text, str) or not isinstance(old, str) or not isinstance(new, str):
             return ToolResult.fail("all arguments must be strings")
         return ToolResult.ok(text.replace(old, new))
+
+class RandomFloatTool(BaseTool):
+    """Generates a random float."""
+
+    @property
+    def name(self) -> str:
+        return "random_float"
+
+    @property
+    def description(self) -> str:
+        return "Generate a random float between min and max"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "min": {"type": "number", "description": "Minimum value"},
+                "max": {"type": "number", "description": "Maximum value"},
+            },
+            "required": ["min", "max"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        min_val = kwargs["min"]
+        max_val = kwargs["max"]
+        if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
+            return ToolResult.fail("min and max must be numbers")
+        if min_val > max_val:
+            return ToolResult.fail("min cannot be greater than max")
+        return ToolResult.ok(random.uniform(min_val, max_val))

@@ -18,6 +18,7 @@ from ledgerloop.tools.builtins import (
     RandomIntTool,
     StringSplitTool,
     StringReplaceTool,
+    RandomFloatTool,
 )
 
 __all__ = [
@@ -41,4 +42,5 @@ __all__ = [
     "RandomIntTool",
     "StringSplitTool",
     "StringReplaceTool",
+    "RandomFloatTool",
 ]
