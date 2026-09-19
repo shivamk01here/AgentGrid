@@ -70,6 +70,8 @@ class TokenBucket:
         """Non-blocking consume. Returns False if tokens are unavailable."""
         if n <= 0:
             raise ValueError("n must be positive")
+        if n > self._capacity:
+            raise ValueError(f"n ({n}) cannot exceed bucket capacity ({self._capacity})")
 
         async with self._lock:
             self._refill()

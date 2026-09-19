@@ -96,6 +96,11 @@ class TestTokenBucket:
         with pytest.raises(ValueError, match="capacity"):
             asyncio.get_event_loop().run_until_complete(b.consume(6))
 
+    def test_try_consume_above_capacity_raises(self):
+        b = TokenBucket(capacity=5, refill_rate=10.0)
+        with pytest.raises(ValueError, match="capacity"):
+            asyncio.get_event_loop().run_until_complete(b.try_consume(6))
+
 
 # ── RateLimiter ──────────────────────────────────────────────────
 
