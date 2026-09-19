@@ -594,7 +594,8 @@ class Run:
             ValueError: The amount's currency differs from what the run has
                 already moved.
         """
-        moved = amount if self.value_moved is None else self.value_moved + amount
+        magnitude = abs(amount)
+        moved = magnitude if self.value_moved is None else self.value_moved + magnitude
         return replace(self, value_moved=moved, version=self.version + 1)
 
     def _transition(self, target: RunState, *, at: datetime, **changes: Any) -> Run:

@@ -170,7 +170,7 @@ def exposure(effects: Sequence[AppliedEffect], currency: Currency) -> Money | No
             continue
         if effect.amount is None or effect.amount.currency is not currency:
             return None
-        total = total + effect.amount
+        total = total + abs(effect.amount)
     return total
 
 
