@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool
 
 
 class TestDateTimeTool:
@@ -449,4 +449,18 @@ class TestDictValuesTool:
     async def test_values_invalid_input(self):
         tool = DictValuesTool()
         result = await tool.execute(json_string="[1, 2]")
+        assert result.success is False
+
+class TestStringJoinTool:
+    @pytest.mark.asyncio
+    async def test_join_success(self):
+        tool = StringJoinTool()
+        result = await tool.execute(parts=["a", "b", "c"], delimiter="-")
+        assert result.success is True
+        assert result.output == "a-b-c"
+        
+    @pytest.mark.asyncio
+    async def test_join_invalid_input(self):
+        tool = StringJoinTool()
+        result = await tool.execute(parts="not a list", delimiter="-")
         assert result.success is False
