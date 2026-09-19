@@ -681,3 +681,30 @@ class RandomFloatTool(BaseTool):
         if min_val > max_val:
             return ToolResult.fail("min cannot be greater than max")
         return ToolResult.ok(random.uniform(min_val, max_val))
+
+class StringTrimTool(BaseTool):
+    """Trims whitespace from a string."""
+
+    @property
+    def name(self) -> str:
+        return "string_trim"
+
+    @property
+    def description(self) -> str:
+        return "Remove leading and trailing whitespace from a string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input string"},
+            },
+            "required": ["text"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        return ToolResult.ok(text.strip())
