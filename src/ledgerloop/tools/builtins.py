@@ -557,3 +557,36 @@ class UrlDecodeTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(urllib.parse.unquote(text))
+
+import random
+
+class RandomIntTool(BaseTool):
+    """Generates a random integer."""
+
+    @property
+    def name(self) -> str:
+        return "random_int"
+
+    @property
+    def description(self) -> str:
+        return "Generate a random integer between min and max (inclusive)"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "min": {"type": "integer", "description": "Minimum value"},
+                "max": {"type": "integer", "description": "Maximum value"},
+            },
+            "required": ["min", "max"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        min_val = kwargs["min"]
+        max_val = kwargs["max"]
+        if not isinstance(min_val, int) or not isinstance(max_val, int):
+            return ToolResult.fail("min and max must be integers")
+        if min_val > max_val:
+            return ToolResult.fail("min cannot be greater than max")
+        return ToolResult.ok(random.randint(min_val, max_val))
