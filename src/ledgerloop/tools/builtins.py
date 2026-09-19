@@ -590,3 +590,32 @@ class RandomIntTool(BaseTool):
         if min_val > max_val:
             return ToolResult.fail("min cannot be greater than max")
         return ToolResult.ok(random.randint(min_val, max_val))
+
+class StringSplitTool(BaseTool):
+    """Splits a string by a delimiter."""
+
+    @property
+    def name(self) -> str:
+        return "string_split"
+
+    @property
+    def description(self) -> str:
+        return "Split a string into a list of parts using a delimiter"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to split"},
+                "delimiter": {"type": "string", "description": "The delimiter to split by"},
+            },
+            "required": ["text", "delimiter"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        delimiter = kwargs["delimiter"]
+        if not isinstance(text, str) or not isinstance(delimiter, str):
+            return ToolResult.fail("text and delimiter must be strings")
+        return ToolResult.ok(text.split(delimiter))
