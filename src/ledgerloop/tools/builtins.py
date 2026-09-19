@@ -708,3 +708,39 @@ class StringTrimTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(text.strip())
+
+class DictKeysTool(BaseTool):
+    """Extracts keys from a JSON object."""
+
+    @property
+    def name(self) -> str:
+        return "dict_keys"
+
+    @property
+    def description(self) -> str:
+        return "Extract a list of top-level keys from a JSON object string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "json_string": {"type": "string", "description": "The JSON object string"},
+            },
+            "required": ["json_string"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        json_string = kwargs["json_string"]
+        
+        try:
+            parsed = json.loads(json_string)
+        except json.JSONDecodeError as exc:
+            return ToolResult.fail(f"Invalid JSON string: {exc}")
+        except TypeError:
+            return ToolResult.fail("Invalid input type for JSON parsing")
+
+        if not isinstance(parsed, dict):
+            return ToolResult.fail("Parsed JSON is not an object")
+
+        return ToolResult.ok(list(parsed.keys()))

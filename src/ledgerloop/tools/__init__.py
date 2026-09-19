@@ -20,6 +20,7 @@ from ledgerloop.tools.builtins import (
     StringReplaceTool,
     RandomFloatTool,
     StringTrimTool,
+    DictKeysTool,
 )
 
 __all__ = [
@@ -45,4 +46,5 @@ __all__ = [
     "StringReplaceTool",
     "RandomFloatTool",
     "StringTrimTool",
+    "DictKeysTool",
 ]
