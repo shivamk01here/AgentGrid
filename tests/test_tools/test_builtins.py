@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool
 
 
 class TestDateTimeTool:
@@ -535,3 +535,17 @@ class TestListSortTool:
         result = await tool.execute(items=[3, "a", 2])
         assert result.success is False
         assert "cannot sort items" in result.error
+
+class TestStringCapitalizeTool:
+    @pytest.mark.asyncio
+    async def test_capitalize_success(self):
+        tool = StringCapitalizeTool()
+        result = await tool.execute(text="hello world")
+        assert result.success is True
+        assert result.output == "Hello world"
+        
+    @pytest.mark.asyncio
+    async def test_capitalize_invalid_input(self):
+        tool = StringCapitalizeTool()
+        result = await tool.execute(text=123)
+        assert result.success is False
