@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool
 
 
 class TestDateTimeTool:
@@ -564,3 +564,17 @@ class TestListUniqueTool:
         result = await tool.execute(items=[{"a": 1}, {"a": 1}])
         assert result.success is False
         assert "hashable" in result.error
+
+class TestMathAbsTool:
+    @pytest.mark.asyncio
+    async def test_abs_success(self):
+        tool = MathAbsTool()
+        result = await tool.execute(value=-42.5)
+        assert result.success is True
+        assert result.output == 42.5
+        
+    @pytest.mark.asyncio
+    async def test_abs_invalid_input(self):
+        tool = MathAbsTool()
+        result = await tool.execute(value="not a number")
+        assert result.success is False
