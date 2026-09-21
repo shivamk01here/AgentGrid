@@ -965,3 +965,30 @@ class ListSortTool(BaseTool):
             return ToolResult.ok(sorted(items))
         except TypeError as exc:
             return ToolResult.fail(f"cannot sort items of mixed or complex types: {exc}")
+
+class StringCapitalizeTool(BaseTool):
+    """Capitalizes the first letter of a string."""
+
+    @property
+    def name(self) -> str:
+        return "string_capitalize"
+
+    @property
+    def description(self) -> str:
+        return "Capitalize the first letter of a string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input string"},
+            },
+            "required": ["text"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        return ToolResult.ok(text.capitalize())
