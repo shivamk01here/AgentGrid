@@ -181,3 +181,6 @@ def test_cycle_detection():
     step_c = Step(name="C", handler=dummy)
     with pytest.raises(ValueError, match="Cycle detected"):
         engine.add_step(step_c)
+def test_negative_timeout_raises():
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        Step(name="bad_timeout", handler=noop_handler, timeout_seconds=-1.0)
