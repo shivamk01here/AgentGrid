@@ -931,3 +931,37 @@ class ListReverseTool(BaseTool):
         if not isinstance(items, list):
             return ToolResult.fail("items must be a list")
         return ToolResult.ok(list(reversed(items)))
+
+class ListSortTool(BaseTool):
+    """Sorts a list of primitive values."""
+
+    @property
+    def name(self) -> str:
+        return "list_sort"
+
+    @property
+    def description(self) -> str:
+        return "Sort a list of primitive values (strings or numbers) in ascending order"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {},
+                    "description": "The list to sort"
+                },
+            },
+            "required": ["items"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        try:
+            return ToolResult.ok(sorted(items))
+        except TypeError as exc:
+            return ToolResult.fail(f"cannot sort items of mixed or complex types: {exc}")
