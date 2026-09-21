@@ -900,3 +900,34 @@ class ListLengthTool(BaseTool):
         if not isinstance(items, list):
             return ToolResult.fail("items must be a list")
         return ToolResult.ok(len(items))
+
+class ListReverseTool(BaseTool):
+    """Reverses the order of a list."""
+
+    @property
+    def name(self) -> str:
+        return "list_reverse"
+
+    @property
+    def description(self) -> str:
+        return "Reverse the order of items in a list"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {},
+                    "description": "The list to reverse"
+                },
+            },
+            "required": ["items"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        return ToolResult.ok(list(reversed(items)))
