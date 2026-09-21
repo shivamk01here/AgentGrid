@@ -30,6 +30,7 @@ from ledgerloop.tools.builtins import (
     ListSortTool,
     StringCapitalizeTool,
     ListUniqueTool,
+    MathAbsTool,
 )
 
 __all__ = [
@@ -65,4 +66,5 @@ __all__ = [
     "ListSortTool",
     "StringCapitalizeTool",
     "ListUniqueTool",
+    "MathAbsTool",
 ]

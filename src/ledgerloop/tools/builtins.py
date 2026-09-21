@@ -1033,3 +1033,30 @@ class ListUniqueTool(BaseTool):
             return ToolResult.ok(result)
         except TypeError as exc:
             return ToolResult.fail(f"items must be hashable types: {exc}")
+
+class MathAbsTool(BaseTool):
+    """Calculates the absolute value of a number."""
+
+    @property
+    def name(self) -> str:
+        return "math_abs"
+
+    @property
+    def description(self) -> str:
+        return "Calculate the absolute value of a number"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "value": {"type": "number", "description": "The number to process"},
+            },
+            "required": ["value"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        value = kwargs["value"]
+        if not isinstance(value, (int, float)):
+            return ToolResult.fail("value must be a number")
+        return ToolResult.ok(abs(value))
