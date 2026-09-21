@@ -84,7 +84,7 @@ class RateLimiter:
 
     def reset(self, key: str | None = None) -> None:
         """Reset one or all buckets."""
-        if key:
+        if key is not None:
             if key in self._buckets:
                 self._buckets[key].reset()
                 self._stats[key] = {"allowed": 0, "denied": 0}

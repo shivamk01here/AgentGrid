@@ -199,3 +199,11 @@ class TestRateLimitMiddleware:
         except RateLimitExceeded as exc:
             assert exc.key == "mykey"
             assert exc.retry_after is not None
+
+    def test_reset_empty_string_key(self, limiter):
+        asyncio.get_event_loop().run_until_complete(limiter.try_acquire("a"))
+        asyncio.get_event_loop().run_until_complete(limiter.try_acquire(""))
+        limiter.reset("")
+        # should only reset the empty string key, 'a' should still have allowed=1
+        assert limiter.get_stats("") == {"allowed": 0, "denied": 0}
+        assert limiter.get_stats("a") == {"allowed": 1, "denied": 0}
