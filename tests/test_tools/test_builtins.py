@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool
 
 
 class TestDateTimeTool:
@@ -491,4 +491,18 @@ class TestStringUpperTool:
     async def test_upper_invalid_input(self):
         tool = StringUpperTool()
         result = await tool.execute(text=123)
+        assert result.success is False
+
+class TestListLengthTool:
+    @pytest.mark.asyncio
+    async def test_length_success(self):
+        tool = ListLengthTool()
+        result = await tool.execute(items=["a", "b", "c"])
+        assert result.success is True
+        assert result.output == 3
+        
+    @pytest.mark.asyncio
+    async def test_length_invalid_input(self):
+        tool = ListLengthTool()
+        result = await tool.execute(items="not a list")
         assert result.success is False
