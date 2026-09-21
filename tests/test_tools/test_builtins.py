@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool
 
 
 class TestDateTimeTool:
@@ -549,3 +549,18 @@ class TestStringCapitalizeTool:
         tool = StringCapitalizeTool()
         result = await tool.execute(text=123)
         assert result.success is False
+
+class TestListUniqueTool:
+    @pytest.mark.asyncio
+    async def test_unique_success(self):
+        tool = ListUniqueTool()
+        result = await tool.execute(items=["a", "b", "a", "c", "b"])
+        assert result.success is True
+        assert result.output == ["a", "b", "c"]
+        
+    @pytest.mark.asyncio
+    async def test_unique_unhashable(self):
+        tool = ListUniqueTool()
+        result = await tool.execute(items=[{"a": 1}, {"a": 1}])
+        assert result.success is False
+        assert "hashable" in result.error
