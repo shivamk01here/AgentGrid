@@ -23,6 +23,7 @@ from ledgerloop.tools.builtins import (
     DictKeysTool,
     DictValuesTool,
     StringJoinTool,
+    StringLowerTool,
 )
 
 __all__ = [
@@ -51,4 +52,5 @@ __all__ = [
     "DictKeysTool",
     "DictValuesTool",
     "StringJoinTool",
+    "StringLowerTool",
 ]

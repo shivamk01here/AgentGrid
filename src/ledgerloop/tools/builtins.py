@@ -815,3 +815,30 @@ class StringJoinTool(BaseTool):
         if not isinstance(delimiter, str):
             return ToolResult.fail("delimiter must be a string")
         return ToolResult.ok(delimiter.join(parts))
+
+class StringLowerTool(BaseTool):
+    """Converts a string to lowercase."""
+
+    @property
+    def name(self) -> str:
+        return "string_lower"
+
+    @property
+    def description(self) -> str:
+        return "Convert a string to lowercase"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input string"},
+            },
+            "required": ["text"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        return ToolResult.ok(text.lower())
