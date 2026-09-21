@@ -992,3 +992,44 @@ class StringCapitalizeTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(text.capitalize())
+
+class ListUniqueTool(BaseTool):
+    """Removes duplicate items from a list."""
+
+    @property
+    def name(self) -> str:
+        return "list_unique"
+
+    @property
+    def description(self) -> str:
+        return "Remove duplicate items from a list while preserving order"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {},
+                    "description": "The list to deduplicate"
+                },
+            },
+            "required": ["items"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        
+        try:
+            seen = set()
+            result = []
+            for item in items:
+                if item not in seen:
+                    seen.add(item)
+                    result.append(item)
+            return ToolResult.ok(result)
+        except TypeError as exc:
+            return ToolResult.fail(f"items must be hashable types: {exc}")
