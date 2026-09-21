@@ -842,3 +842,30 @@ class StringLowerTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(text.lower())
+
+class StringUpperTool(BaseTool):
+    """Converts a string to uppercase."""
+
+    @property
+    def name(self) -> str:
+        return "string_upper"
+
+    @property
+    def description(self) -> str:
+        return "Convert a string to uppercase"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The input string"},
+            },
+            "required": ["text"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        return ToolResult.ok(text.upper())
