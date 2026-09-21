@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool
 
 
 class TestDateTimeTool:
@@ -520,3 +520,18 @@ class TestListReverseTool:
         tool = ListReverseTool()
         result = await tool.execute(items="not a list")
         assert result.success is False
+
+class TestListSortTool:
+    @pytest.mark.asyncio
+    async def test_sort_success(self):
+        tool = ListSortTool()
+        result = await tool.execute(items=[3, 1, 2])
+        assert result.success is True
+        assert result.output == [1, 2, 3]
+        
+    @pytest.mark.asyncio
+    async def test_sort_mixed_types(self):
+        tool = ListSortTool()
+        result = await tool.execute(items=[3, "a", 2])
+        assert result.success is False
+        assert "cannot sort items" in result.error
