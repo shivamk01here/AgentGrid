@@ -869,3 +869,34 @@ class StringUpperTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(text.upper())
+
+class ListLengthTool(BaseTool):
+    """Calculates the length of a list."""
+
+    @property
+    def name(self) -> str:
+        return "list_length"
+
+    @property
+    def description(self) -> str:
+        return "Calculate the number of items in a list"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {},
+                    "description": "The list to measure"
+                },
+            },
+            "required": ["items"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        return ToolResult.ok(len(items))

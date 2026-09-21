@@ -25,6 +25,7 @@ from ledgerloop.tools.builtins import (
     StringJoinTool,
     StringLowerTool,
     StringUpperTool,
+    ListLengthTool,
 )
 
 __all__ = [
@@ -55,4 +56,5 @@ __all__ = [
     "StringJoinTool",
     "StringLowerTool",
     "StringUpperTool",
+    "ListLengthTool",
 ]
