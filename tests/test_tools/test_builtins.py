@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool
 
 
 class TestDateTimeTool:
@@ -476,5 +476,19 @@ class TestStringLowerTool:
     @pytest.mark.asyncio
     async def test_lower_invalid_input(self):
         tool = StringLowerTool()
+        result = await tool.execute(text=123)
+        assert result.success is False
+
+class TestStringUpperTool:
+    @pytest.mark.asyncio
+    async def test_upper_success(self):
+        tool = StringUpperTool()
+        result = await tool.execute(text="HeLlO wOrLd")
+        assert result.success is True
+        assert result.output == "HELLO WORLD"
+        
+    @pytest.mark.asyncio
+    async def test_upper_invalid_input(self):
+        tool = StringUpperTool()
         result = await tool.execute(text=123)
         assert result.success is False
