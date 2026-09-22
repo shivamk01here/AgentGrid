@@ -1093,3 +1093,38 @@ class MathRoundTool(BaseTool):
         if decimal_places < 0:
             return ToolResult.fail("decimal_places must be non-negative")
         return ToolResult.ok(round(value, decimal_places))
+
+class StringContainsTool(BaseTool):
+    """Checks whether a string contains a given substring."""
+
+    @property
+    def name(self) -> str:
+        return "string_contains"
+
+    @property
+    def description(self) -> str:
+        return "Check whether a string contains a given substring"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to search in"},
+                "substring": {"type": "string", "description": "The substring to look for"},
+                "case_sensitive": {"type": "boolean", "description": "Whether to use case-sensitive matching (default true)"},
+            },
+            "required": ["text", "substring"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        substring = kwargs["substring"]
+        case_sensitive = kwargs.get("case_sensitive", True)
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        if not isinstance(substring, str):
+            return ToolResult.fail("substring must be a string")
+        if case_sensitive:
+            return ToolResult.ok(substring in text)
+        return ToolResult.ok(substring.lower() in text.lower())
