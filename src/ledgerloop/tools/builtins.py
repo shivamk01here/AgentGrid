@@ -1060,3 +1060,36 @@ class MathAbsTool(BaseTool):
         if not isinstance(value, (int, float)):
             return ToolResult.fail("value must be a number")
         return ToolResult.ok(abs(value))
+
+class MathRoundTool(BaseTool):
+    """Rounds a number to a given number of decimal places."""
+
+    @property
+    def name(self) -> str:
+        return "math_round"
+
+    @property
+    def description(self) -> str:
+        return "Round a number to a specified number of decimal places"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "value": {"type": "number", "description": "The number to round"},
+                "decimal_places": {"type": "integer", "description": "Number of decimal places (default 0)"},
+            },
+            "required": ["value"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        value = kwargs["value"]
+        decimal_places = kwargs.get("decimal_places", 0)
+        if not isinstance(value, (int, float)):
+            return ToolResult.fail("value must be a number")
+        if not isinstance(decimal_places, int) or isinstance(decimal_places, bool):
+            return ToolResult.fail("decimal_places must be an integer")
+        if decimal_places < 0:
+            return ToolResult.fail("decimal_places must be non-negative")
+        return ToolResult.ok(round(value, decimal_places))
