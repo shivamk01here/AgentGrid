@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool
 
 
 class TestDateTimeTool:
@@ -576,5 +576,26 @@ class TestMathAbsTool:
     @pytest.mark.asyncio
     async def test_abs_invalid_input(self):
         tool = MathAbsTool()
+        result = await tool.execute(value="not a number")
+        assert result.success is False
+
+class TestMathRoundTool:
+    @pytest.mark.asyncio
+    async def test_round_to_decimal(self):
+        tool = MathRoundTool()
+        result = await tool.execute(value=3.14159, decimal_places=2)
+        assert result.success is True
+        assert result.output == 3.14
+        
+    @pytest.mark.asyncio
+    async def test_round_to_zero(self):
+        tool = MathRoundTool()
+        result = await tool.execute(value=3.7)
+        assert result.success is True
+        assert result.output == 4
+        
+    @pytest.mark.asyncio
+    async def test_round_invalid_input(self):
+        tool = MathRoundTool()
         result = await tool.execute(value="not a number")
         assert result.success is False
