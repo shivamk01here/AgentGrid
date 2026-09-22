@@ -33,6 +33,7 @@ from ledgerloop.tools.builtins import (
     MathAbsTool,
     MathRoundTool,
     StringContainsTool,
+    ListSumTool,
 )
 
 __all__ = [
@@ -71,4 +72,5 @@ __all__ = [
     "MathAbsTool",
     "MathRoundTool",
     "StringContainsTool",
+    "ListSumTool",
 ]

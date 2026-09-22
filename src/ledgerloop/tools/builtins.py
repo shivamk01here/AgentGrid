@@ -1128,3 +1128,36 @@ class StringContainsTool(BaseTool):
         if case_sensitive:
             return ToolResult.ok(substring in text)
         return ToolResult.ok(substring.lower() in text.lower())
+
+class ListSumTool(BaseTool):
+    """Calculates the sum of a list of numbers."""
+
+    @property
+    def name(self) -> str:
+        return "list_sum"
+
+    @property
+    def description(self) -> str:
+        return "Calculate the sum of all numbers in a list"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "The list of numbers to sum"
+                },
+            },
+            "required": ["items"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in items):
+            return ToolResult.fail("all items must be numbers")
+        return ToolResult.ok(sum(items))
