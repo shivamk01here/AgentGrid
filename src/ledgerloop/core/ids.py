@@ -163,7 +163,7 @@ class IdempotencyKey(Identifier):
         """
         if not parts:
             raise ValueError("IdempotencyKey.derive requires at least one part")
-        if any(not part for part in parts):
+        if any(not part.strip() for part in parts):
             raise ValueError("IdempotencyKey parts cannot be empty")
 
         # Hashed rather than concatenated: parts may contain separators or

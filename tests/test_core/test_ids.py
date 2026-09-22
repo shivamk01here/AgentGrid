@@ -97,3 +97,7 @@ class TestIdempotencyKey:
     def test_empty_part_rejected(self):
         with pytest.raises(ValueError, match="cannot be empty"):
             IdempotencyKey.derive("refund", "")
+
+    def test_whitespace_only_part_rejected(self):
+        with pytest.raises(ValueError, match="cannot be empty"):
+            IdempotencyKey.derive("refund", "   ")
