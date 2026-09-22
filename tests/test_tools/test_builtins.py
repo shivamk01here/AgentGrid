@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool
 
 
 class TestDateTimeTool:
@@ -599,3 +599,25 @@ class TestMathRoundTool:
         tool = MathRoundTool()
         result = await tool.execute(value="not a number")
         assert result.success is False
+
+class TestStringContainsTool:
+    @pytest.mark.asyncio
+    async def test_contains_success(self):
+        tool = StringContainsTool()
+        result = await tool.execute(text="Hello World", substring="World")
+        assert result.success is True
+        assert result.output is True
+        
+    @pytest.mark.asyncio
+    async def test_case_insensitive(self):
+        tool = StringContainsTool()
+        result = await tool.execute(text="Hello World", substring="world", case_sensitive=False)
+        assert result.success is True
+        assert result.output is True
+        
+    @pytest.mark.asyncio
+    async def test_not_found(self):
+        tool = StringContainsTool()
+        result = await tool.execute(text="Hello", substring="xyz")
+        assert result.success is True
+        assert result.output is False
