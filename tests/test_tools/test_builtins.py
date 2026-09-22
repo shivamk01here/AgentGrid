@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool
 
 
 class TestDateTimeTool:
@@ -621,3 +621,25 @@ class TestStringContainsTool:
         result = await tool.execute(text="Hello", substring="xyz")
         assert result.success is True
         assert result.output is False
+
+class TestListSumTool:
+    @pytest.mark.asyncio
+    async def test_sum_success(self):
+        tool = ListSumTool()
+        result = await tool.execute(items=[1, 2, 3, 4.5])
+        assert result.success is True
+        assert result.output == 10.5
+        
+    @pytest.mark.asyncio
+    async def test_sum_invalid_types(self):
+        tool = ListSumTool()
+        result = await tool.execute(items=[1, "two", 3])
+        assert result.success is False
+        assert "numbers" in result.error
+        
+    @pytest.mark.asyncio
+    async def test_sum_empty_list(self):
+        tool = ListSumTool()
+        result = await tool.execute(items=[])
+        assert result.success is True
+        assert result.output == 0
