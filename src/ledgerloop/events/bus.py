@@ -89,9 +89,9 @@ class EventBus:
         if limit <= 0:
             return []
         events = self._history
-        if topic:
+        if topic is not None:
             events = [e for e in events if self._matches(topic, e.topic)]
-        return events[-limit:]
+        return list(events[-limit:])
 
     @staticmethod
     def _matches(pattern: str, topic: str) -> bool:

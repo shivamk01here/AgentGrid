@@ -85,3 +85,12 @@ class TestEventBus:
         e = Event(topic="test")
         assert "test" in repr(e)
         assert e.event_id in repr(e)
+
+    @pytest.mark.asyncio
+    async def test_get_history_empty_string_topic_filters(self, event_bus):
+        # topic="" is a valid filter (no events will have an empty topic),
+        # not the same as passing topic=None which returns everything.
+        await event_bus.emit(Event(topic="a.b"))
+        await event_bus.emit(Event(topic="a.c"))
+        history = event_bus.get_history(topic="")
+        assert history == []
