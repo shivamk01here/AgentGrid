@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool
 
 
 class TestDateTimeTool:
@@ -684,4 +684,24 @@ class TestStringEndsWithTool:
     async def test_ends_with_invalid_input(self):
         tool = StringEndsWithTool()
         result = await tool.execute(text=123, suffix=".json")
+        assert result.success is False
+
+class TestListMaxTool:
+    @pytest.mark.asyncio
+    async def test_max_success(self):
+        tool = ListMaxTool()
+        result = await tool.execute(items=[3, 1, 7, 2])
+        assert result.success is True
+        assert result.output == 7
+
+    @pytest.mark.asyncio
+    async def test_max_empty_list(self):
+        tool = ListMaxTool()
+        result = await tool.execute(items=[])
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_max_invalid_types(self):
+        tool = ListMaxTool()
+        result = await tool.execute(items=[1, "two"])
         assert result.success is False
