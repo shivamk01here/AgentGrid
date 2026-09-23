@@ -1192,3 +1192,34 @@ class StringStartsWithTool(BaseTool):
         if not isinstance(prefix, str):
             return ToolResult.fail("prefix must be a string")
         return ToolResult.ok(text.startswith(prefix))
+
+class StringEndsWithTool(BaseTool):
+    """Checks whether a string ends with a given suffix."""
+
+    @property
+    def name(self) -> str:
+        return "string_ends_with"
+
+    @property
+    def description(self) -> str:
+        return "Check whether a string ends with a given suffix"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to check"},
+                "suffix": {"type": "string", "description": "The suffix to look for"},
+            },
+            "required": ["text", "suffix"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        suffix = kwargs["suffix"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        if not isinstance(suffix, str):
+            return ToolResult.fail("suffix must be a string")
+        return ToolResult.ok(text.endswith(suffix))
