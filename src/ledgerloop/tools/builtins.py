@@ -1258,3 +1258,38 @@ class ListMaxTool(BaseTool):
         if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in items):
             return ToolResult.fail("all items must be numbers")
         return ToolResult.ok(max(items))
+
+class ListMinTool(BaseTool):
+    """Finds the minimum value in a list of numbers."""
+
+    @property
+    def name(self) -> str:
+        return "list_min"
+
+    @property
+    def description(self) -> str:
+        return "Find the minimum value in a list of numbers"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "The list of numbers",
+                },
+            },
+            "required": ["items"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        if not items:
+            return ToolResult.fail("items must not be empty")
+        if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in items):
+            return ToolResult.fail("all items must be numbers")
+        return ToolResult.ok(min(items))

@@ -37,6 +37,7 @@ from ledgerloop.tools.builtins import (
     StringStartsWithTool,
     StringEndsWithTool,
     ListMaxTool,
+    ListMinTool,
 )
 
 __all__ = [
@@ -79,4 +80,5 @@ __all__ = [
     "StringStartsWithTool",
     "StringEndsWithTool",
     "ListMaxTool",
+    "ListMinTool",
 ]
