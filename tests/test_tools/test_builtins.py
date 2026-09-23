@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool
 
 
 class TestDateTimeTool:
@@ -663,4 +663,25 @@ class TestStringStartsWithTool:
     async def test_starts_with_invalid_input(self):
         tool = StringStartsWithTool()
         result = await tool.execute(text=123, prefix="h")
+        assert result.success is False
+
+class TestStringEndsWithTool:
+    @pytest.mark.asyncio
+    async def test_ends_with_true(self):
+        tool = StringEndsWithTool()
+        result = await tool.execute(text="hello.json", suffix=".json")
+        assert result.success is True
+        assert result.output is True
+
+    @pytest.mark.asyncio
+    async def test_ends_with_false(self):
+        tool = StringEndsWithTool()
+        result = await tool.execute(text="hello.csv", suffix=".json")
+        assert result.success is True
+        assert result.output is False
+
+    @pytest.mark.asyncio
+    async def test_ends_with_invalid_input(self):
+        tool = StringEndsWithTool()
+        result = await tool.execute(text=123, suffix=".json")
         assert result.success is False
