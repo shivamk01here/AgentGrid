@@ -1161,3 +1161,34 @@ class ListSumTool(BaseTool):
         if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in items):
             return ToolResult.fail("all items must be numbers")
         return ToolResult.ok(sum(items))
+
+class StringStartsWithTool(BaseTool):
+    """Checks whether a string starts with a given prefix."""
+
+    @property
+    def name(self) -> str:
+        return "string_starts_with"
+
+    @property
+    def description(self) -> str:
+        return "Check whether a string starts with a given prefix"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to check"},
+                "prefix": {"type": "string", "description": "The prefix to look for"},
+            },
+            "required": ["text", "prefix"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        prefix = kwargs["prefix"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        if not isinstance(prefix, str):
+            return ToolResult.fail("prefix must be a string")
+        return ToolResult.ok(text.startswith(prefix))
