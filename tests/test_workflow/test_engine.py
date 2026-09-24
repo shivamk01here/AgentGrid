@@ -184,3 +184,7 @@ def test_cycle_detection():
 def test_negative_timeout_raises():
     with pytest.raises(ValueError, match="timeout_seconds"):
         Step(name="bad_timeout", handler=noop_handler, timeout_seconds=-1.0)
+
+def test_zero_timeout_raises():
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        Step(name="zero_timeout", handler=noop_handler, timeout_seconds=0.0)

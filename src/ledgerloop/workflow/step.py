@@ -44,7 +44,7 @@ class Step:
     def __post_init__(self) -> None:
         if self.retry_count < 0:
             raise ValueError("retry_count must be non-negative")
-        if self.timeout_seconds is not None and self.timeout_seconds < 0:
+        if self.timeout_seconds is not None and self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
 
     async def execute(self, context: dict[str, Any]) -> StepResult:
