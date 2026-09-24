@@ -1359,3 +1359,36 @@ class DictMergeTool(BaseTool):
         if not isinstance(overrides, dict):
             return ToolResult.fail("overrides must be a dictionary")
         return ToolResult.ok({**base, **overrides})
+
+class DictGetTool(BaseTool):
+    """Safely retrieves a value from a dictionary by key."""
+
+    @property
+    def name(self) -> str:
+        return "dict_get"
+
+    @property
+    def description(self) -> str:
+        return "Get the value for a key from a dictionary, with an optional default"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "data": {"type": "object", "description": "The dictionary to read from"},
+                "key": {"type": "string", "description": "The key to look up"},
+                "default": {"description": "Value to return when the key is absent"},
+            },
+            "required": ["data", "key"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        data = kwargs["data"]
+        key = kwargs["key"]
+        default = kwargs.get("default")
+        if not isinstance(data, dict):
+            return ToolResult.fail("data must be a dictionary")
+        if not isinstance(key, str):
+            return ToolResult.fail("key must be a string")
+        return ToolResult.ok(data.get(key, default))
