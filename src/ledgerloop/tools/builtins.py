@@ -1392,3 +1392,32 @@ class DictGetTool(BaseTool):
         if not isinstance(key, str):
             return ToolResult.fail("key must be a string")
         return ToolResult.ok(data.get(key, default))
+
+class ListContainsTool(BaseTool):
+    """Checks whether a list contains a given value."""
+
+    @property
+    def name(self) -> str:
+        return "list_contains"
+
+    @property
+    def description(self) -> str:
+        return "Check whether a list contains a given value"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {"type": "array", "description": "The list to search"},
+                "value": {"description": "The value to look for"},
+            },
+            "required": ["items", "value"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        value = kwargs["value"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        return ToolResult.ok(value in items)

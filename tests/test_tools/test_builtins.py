@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool
 
 
 class TestDateTimeTool:
@@ -785,4 +785,25 @@ class TestDictGetTool:
     async def test_get_invalid_data(self):
         tool = DictGetTool()
         result = await tool.execute(data="not a dict", key="a")
+        assert result.success is False
+
+class TestListContainsTool:
+    @pytest.mark.asyncio
+    async def test_contains_found(self):
+        tool = ListContainsTool()
+        result = await tool.execute(items=[1, 2, 3], value=2)
+        assert result.success is True
+        assert result.output is True
+
+    @pytest.mark.asyncio
+    async def test_contains_not_found(self):
+        tool = ListContainsTool()
+        result = await tool.execute(items=[1, 2, 3], value=99)
+        assert result.success is True
+        assert result.output is False
+
+    @pytest.mark.asyncio
+    async def test_contains_invalid_list(self):
+        tool = ListContainsTool()
+        result = await tool.execute(items="not a list", value=1)
         assert result.success is False
