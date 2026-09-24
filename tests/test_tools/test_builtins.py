@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool
 
 
 class TestDateTimeTool:
@@ -723,5 +723,25 @@ class TestListMinTool:
     @pytest.mark.asyncio
     async def test_min_invalid_types(self):
         tool = ListMinTool()
+        result = await tool.execute(items=[1, "two"])
+        assert result.success is False
+
+class TestListAverageTool:
+    @pytest.mark.asyncio
+    async def test_average_success(self):
+        tool = ListAverageTool()
+        result = await tool.execute(items=[1, 2, 3, 4, 5])
+        assert result.success is True
+        assert result.output == 3.0
+
+    @pytest.mark.asyncio
+    async def test_average_empty_list(self):
+        tool = ListAverageTool()
+        result = await tool.execute(items=[])
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_average_invalid_types(self):
+        tool = ListAverageTool()
         result = await tool.execute(items=[1, "two"])
         assert result.success is False
