@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool
 
 
 class TestDateTimeTool:
@@ -764,4 +764,25 @@ class TestDictMergeTool:
     async def test_merge_invalid_overrides(self):
         tool = DictMergeTool()
         result = await tool.execute(base={}, overrides="not a dict")
+        assert result.success is False
+
+class TestDictGetTool:
+    @pytest.mark.asyncio
+    async def test_get_existing_key(self):
+        tool = DictGetTool()
+        result = await tool.execute(data={"a": 1, "b": 2}, key="a")
+        assert result.success is True
+        assert result.output == 1
+
+    @pytest.mark.asyncio
+    async def test_get_missing_key_with_default(self):
+        tool = DictGetTool()
+        result = await tool.execute(data={"a": 1}, key="z", default="fallback")
+        assert result.success is True
+        assert result.output == "fallback"
+
+    @pytest.mark.asyncio
+    async def test_get_invalid_data(self):
+        tool = DictGetTool()
+        result = await tool.execute(data="not a dict", key="a")
         assert result.success is False
