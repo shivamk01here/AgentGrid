@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool
 
 
 class TestDateTimeTool:
@@ -744,4 +744,24 @@ class TestListAverageTool:
     async def test_average_invalid_types(self):
         tool = ListAverageTool()
         result = await tool.execute(items=[1, "two"])
+        assert result.success is False
+
+class TestDictMergeTool:
+    @pytest.mark.asyncio
+    async def test_merge_success(self):
+        tool = DictMergeTool()
+        result = await tool.execute(base={"a": 1, "b": 2}, overrides={"b": 99, "c": 3})
+        assert result.success is True
+        assert result.output == {"a": 1, "b": 99, "c": 3}
+
+    @pytest.mark.asyncio
+    async def test_merge_invalid_base(self):
+        tool = DictMergeTool()
+        result = await tool.execute(base="not a dict", overrides={})
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_merge_invalid_overrides(self):
+        tool = DictMergeTool()
+        result = await tool.execute(base={}, overrides="not a dict")
         assert result.success is False
