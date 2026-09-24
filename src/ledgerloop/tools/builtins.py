@@ -1328,3 +1328,34 @@ class ListAverageTool(BaseTool):
         if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in items):
             return ToolResult.fail("all items must be numbers")
         return ToolResult.ok(sum(items) / len(items))
+
+class DictMergeTool(BaseTool):
+    """Merges two dictionaries, with the second taking precedence on key conflicts."""
+
+    @property
+    def name(self) -> str:
+        return "dict_merge"
+
+    @property
+    def description(self) -> str:
+        return "Merge two dictionaries; keys in the second dict override those in the first"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "base": {"type": "object", "description": "The base dictionary"},
+                "overrides": {"type": "object", "description": "The dictionary to merge in"},
+            },
+            "required": ["base", "overrides"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        base = kwargs["base"]
+        overrides = kwargs["overrides"]
+        if not isinstance(base, dict):
+            return ToolResult.fail("base must be a dictionary")
+        if not isinstance(overrides, dict):
+            return ToolResult.fail("overrides must be a dictionary")
+        return ToolResult.ok({**base, **overrides})
