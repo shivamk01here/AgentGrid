@@ -1421,3 +1421,28 @@ class ListContainsTool(BaseTool):
         if not isinstance(items, list):
             return ToolResult.fail("items must be a list")
         return ToolResult.ok(value in items)
+
+class TypeOfTool(BaseTool):
+    """Returns the Python type name of a value."""
+
+    @property
+    def name(self) -> str:
+        return "type_of"
+
+    @property
+    def description(self) -> str:
+        return "Return the type name of the given value (e.g. 'str', 'int', 'list')"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "value": {"description": "The value whose type to inspect"},
+            },
+            "required": ["value"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        value = kwargs["value"]
+        return ToolResult.ok(type(value).__name__)
