@@ -64,7 +64,7 @@ class Authenticator:
         """Verify an API key and return the identity, or None."""
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         agent_id = self._key_to_id.get(key_hash)
-        if agent_id:
+        if agent_id is not None:
             return self._identities.get(agent_id)
         return None
 

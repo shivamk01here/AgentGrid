@@ -73,3 +73,12 @@ class TestAuthenticator:
         new_key = auth.create_identity("agent-1")
         assert auth.verify(old_key) is None
         assert auth.verify(new_key).agent_id == "agent-1"
+
+    def test_verify_empty_string_agent_id(self):
+        # An empty-string agent id is unusual but must not silently break
+        # verify, which previously used 'if agent_id:' and skipped the lookup.
+        auth = Authenticator()
+        api_key = auth.create_identity("")
+        identity = auth.verify(api_key)
+        assert identity is not None
+        assert identity.agent_id == ""
