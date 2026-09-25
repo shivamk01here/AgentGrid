@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool
 
 
 class TestDateTimeTool:
@@ -829,3 +829,24 @@ class TestTypeOfTool:
         result = await tool.execute(value=[1, 2, 3])
         assert result.success is True
         assert result.output == "list"
+
+class TestStringRepeatTool:
+    @pytest.mark.asyncio
+    async def test_repeat_success(self):
+        tool = StringRepeatTool()
+        result = await tool.execute(text="ab", count=3)
+        assert result.success is True
+        assert result.output == "ababab"
+
+    @pytest.mark.asyncio
+    async def test_repeat_zero(self):
+        tool = StringRepeatTool()
+        result = await tool.execute(text="ab", count=0)
+        assert result.success is True
+        assert result.output == ""
+
+    @pytest.mark.asyncio
+    async def test_repeat_negative(self):
+        tool = StringRepeatTool()
+        result = await tool.execute(text="ab", count=-1)
+        assert result.success is False
