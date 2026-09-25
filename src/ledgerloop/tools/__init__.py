@@ -44,6 +44,7 @@ from ledgerloop.tools.builtins import (
     ListContainsTool,
     TypeOfTool,
     StringRepeatTool,
+    MathClampTool,
 )
 
 __all__ = [
@@ -93,4 +94,5 @@ __all__ = [
     "ListContainsTool",
     "TypeOfTool",
     "StringRepeatTool",
+    "MathClampTool",
 ]

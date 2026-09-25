@@ -1479,3 +1479,37 @@ class StringRepeatTool(BaseTool):
         if count < 0:
             return ToolResult.fail("count must be non-negative")
         return ToolResult.ok(text * count)
+
+class MathClampTool(BaseTool):
+    """Clamps a number between a minimum and maximum bound."""
+
+    @property
+    def name(self) -> str:
+        return "math_clamp"
+
+    @property
+    def description(self) -> str:
+        return "Clamp a number so it falls within [min_val, max_val]"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "value": {"type": "number", "description": "The number to clamp"},
+                "min_val": {"type": "number", "description": "Minimum allowed value"},
+                "max_val": {"type": "number", "description": "Maximum allowed value"},
+            },
+            "required": ["value", "min_val", "max_val"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        value = kwargs["value"]
+        min_val = kwargs["min_val"]
+        max_val = kwargs["max_val"]
+        for name, v in ((""value", value), ("min_val", min_val), ("max_val", max_val)):
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                return ToolResult.fail(f"{name} must be a number")
+        if min_val > max_val:
+            return ToolResult.fail("min_val must not exceed max_val")
+        return ToolResult.ok(max(min_val, min(max_val, value)))
