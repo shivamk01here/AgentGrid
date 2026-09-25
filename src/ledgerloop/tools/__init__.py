@@ -43,6 +43,7 @@ from ledgerloop.tools.builtins import (
     DictGetTool,
     ListContainsTool,
     TypeOfTool,
+    StringRepeatTool,
 )
 
 __all__ = [
@@ -91,4 +92,5 @@ __all__ = [
     "DictGetTool",
     "ListContainsTool",
     "TypeOfTool",
+    "StringRepeatTool",
 ]

@@ -1446,3 +1446,36 @@ class TypeOfTool(BaseTool):
     async def execute(self, **kwargs: Any) -> ToolResult:
         value = kwargs["value"]
         return ToolResult.ok(type(value).__name__)
+
+class StringRepeatTool(BaseTool):
+    """Repeats a string a given number of times."""
+
+    @property
+    def name(self) -> str:
+        return "string_repeat"
+
+    @property
+    def description(self) -> str:
+        return "Repeat a string N times"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to repeat"},
+                "count": {"type": "integer", "description": "How many times to repeat"},
+            },
+            "required": ["text", "count"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        count = kwargs["count"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        if not isinstance(count, int) or isinstance(count, bool):
+            return ToolResult.fail("count must be an integer")
+        if count < 0:
+            return ToolResult.fail("count must be non-negative")
+        return ToolResult.ok(text * count)
