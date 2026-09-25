@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool
 
 
 class TestDateTimeTool:
@@ -849,4 +849,32 @@ class TestStringRepeatTool:
     async def test_repeat_negative(self):
         tool = StringRepeatTool()
         result = await tool.execute(text="ab", count=-1)
+        assert result.success is False
+
+class TestMathClampTool:
+    @pytest.mark.asyncio
+    async def test_clamp_below_min(self):
+        tool = MathClampTool()
+        result = await tool.execute(value=-5, min_val=0, max_val=100)
+        assert result.success is True
+        assert result.output == 0
+
+    @pytest.mark.asyncio
+    async def test_clamp_above_max(self):
+        tool = MathClampTool()
+        result = await tool.execute(value=200, min_val=0, max_val=100)
+        assert result.success is True
+        assert result.output == 100
+
+    @pytest.mark.asyncio
+    async def test_clamp_within_range(self):
+        tool = MathClampTool()
+        result = await tool.execute(value=50, min_val=0, max_val=100)
+        assert result.success is True
+        assert result.output == 50
+
+    @pytest.mark.asyncio
+    async def test_clamp_invalid_bounds(self):
+        tool = MathClampTool()
+        result = await tool.execute(value=50, min_val=100, max_val=0)
         assert result.success is False
