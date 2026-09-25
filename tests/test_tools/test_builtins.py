@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool
 
 
 class TestDateTimeTool:
@@ -807,3 +807,25 @@ class TestListContainsTool:
         tool = ListContainsTool()
         result = await tool.execute(items="not a list", value=1)
         assert result.success is False
+
+class TestTypeOfTool:
+    @pytest.mark.asyncio
+    async def test_type_of_string(self):
+        tool = TypeOfTool()
+        result = await tool.execute(value="hello")
+        assert result.success is True
+        assert result.output == "str"
+
+    @pytest.mark.asyncio
+    async def test_type_of_int(self):
+        tool = TypeOfTool()
+        result = await tool.execute(value=42)
+        assert result.success is True
+        assert result.output == "int"
+
+    @pytest.mark.asyncio
+    async def test_type_of_list(self):
+        tool = TypeOfTool()
+        result = await tool.execute(value=[1, 2, 3])
+        assert result.success is True
+        assert result.output == "list"
