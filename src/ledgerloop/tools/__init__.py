@@ -45,6 +45,7 @@ from ledgerloop.tools.builtins import (
     TypeOfTool,
     StringRepeatTool,
     MathClampTool,
+    StringCountOccurrencesTool,
 )
 
 __all__ = [
@@ -95,4 +96,5 @@ __all__ = [
     "TypeOfTool",
     "StringRepeatTool",
     "MathClampTool",
+    "StringCountOccurrencesTool",
 ]

@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool
 
 
 class TestDateTimeTool:
@@ -877,4 +877,25 @@ class TestMathClampTool:
     async def test_clamp_invalid_bounds(self):
         tool = MathClampTool()
         result = await tool.execute(value=50, min_val=100, max_val=0)
+        assert result.success is False
+
+class TestStringCountOccurrencesTool:
+    @pytest.mark.asyncio
+    async def test_count_found(self):
+        tool = StringCountOccurrencesTool()
+        result = await tool.execute(text="banana", substring="an")
+        assert result.success is True
+        assert result.output == 2
+
+    @pytest.mark.asyncio
+    async def test_count_not_found(self):
+        tool = StringCountOccurrencesTool()
+        result = await tool.execute(text="hello", substring="xyz")
+        assert result.success is True
+        assert result.output == 0
+
+    @pytest.mark.asyncio
+    async def test_count_empty_substring(self):
+        tool = StringCountOccurrencesTool()
+        result = await tool.execute(text="hello", substring="")
         assert result.success is False

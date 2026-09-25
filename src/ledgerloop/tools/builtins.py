@@ -1513,3 +1513,36 @@ class MathClampTool(BaseTool):
         if min_val > max_val:
             return ToolResult.fail("min_val must not exceed max_val")
         return ToolResult.ok(max(min_val, min(max_val, value)))
+
+class StringCountOccurrencesTool(BaseTool):
+    """Counts how many times a substring appears in a string."""
+
+    @property
+    def name(self) -> str:
+        return "string_count_occurrences"
+
+    @property
+    def description(self) -> str:
+        return "Count how many times a substring occurs in a string"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to search in"},
+                "substring": {"type": "string", "description": "The substring to count"},
+            },
+            "required": ["text", "substring"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        substring = kwargs["substring"]
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        if not isinstance(substring, str):
+            return ToolResult.fail("substring must be a string")
+        if not substring:
+            return ToolResult.fail("substring must not be empty")
+        return ToolResult.ok(text.count(substring))
