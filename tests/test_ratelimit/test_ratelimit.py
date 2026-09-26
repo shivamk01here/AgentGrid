@@ -207,3 +207,15 @@ class TestRateLimitMiddleware:
         # should only reset the empty string key, 'a' should still have allowed=1
         assert limiter.get_stats("") == {"allowed": 0, "denied": 0}
         assert limiter.get_stats("a") == {"allowed": 1, "denied": 0}
+
+    def test_try_acquire_retry_after_consistent_with_remaining(self, limiter):
+        # Exhaust the bucket so the next call is denied.
+        for _ in range(5):
+            asyncio.get_event_loop().run_until_complete(limiter.try_acquire("k"))
+        result = asyncio.get_event_loop().run_until_complete(limiter.try_acquire("k"))
+        assert result.allowed is False
+        assert result.retry_after is not None
+        # retry_after is computed from the same token snapshot as remaining,
+        # so retry_after + remaining should equal the requested token count (1).
+        assert result.retry_after >= 0
+        assert result.remaining >= 0

@@ -71,11 +71,12 @@ class RateLimiter:
         else:
             self._stats[key]["denied"] += 1
 
+        current_tokens = bucket.tokens
         return RateLimitResult(
             allowed=allowed,
-            remaining=bucket.tokens,
+            remaining=current_tokens,
             limit=self._config.max_requests,
-            retry_after=(tokens - bucket.tokens) / bucket._refill_rate if not allowed else None,
+            retry_after=(tokens - current_tokens) / bucket._refill_rate if not allowed else None,
         )
 
     def get_stats(self, key: str = "default") -> dict[str, int]:
