@@ -47,6 +47,7 @@ from ledgerloop.tools.builtins import (
     MathClampTool,
     StringCountOccurrencesTool,
     ListIndexOfTool,
+    StringPadTool,
 )
 
 __all__ = [
@@ -99,4 +100,5 @@ __all__ = [
     "MathClampTool",
     "StringCountOccurrencesTool",
     "ListIndexOfTool",
+    "StringPadTool",
 ]

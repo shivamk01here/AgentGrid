@@ -1578,3 +1578,46 @@ class ListIndexOfTool(BaseTool):
             return ToolResult.ok(items.index(value))
         except ValueError:
             return ToolResult.ok(-1)
+
+class StringPadTool(BaseTool):
+    """Pads a string to a given width with a fill character."""
+
+    @property
+    def name(self) -> str:
+        return "string_pad"
+
+    @property
+    def description(self) -> str:
+        return "Pad a string to a target width. side must be 'left', 'right', or 'both'"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The string to pad"},
+                "width": {"type": "integer", "description": "Target total width"},
+                "fill": {"type": "string", "description": "Fill character (default space)"},
+                "side": {"type": "string", "description": "'left', 'right', or 'both'"},
+            },
+            "required": ["text", "width"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        text = kwargs["text"]
+        width = kwargs["width"]
+        fill = kwargs.get("fill", " ")
+        side = kwargs.get("side", "right")
+        if not isinstance(text, str):
+            return ToolResult.fail("text must be a string")
+        if not isinstance(width, int) or isinstance(width, bool) or width < 0:
+            return ToolResult.fail("width must be a non-negative integer")
+        if not isinstance(fill, str) or len(fill) != 1:
+            return ToolResult.fail("fill must be a single character")
+        if side == "left":
+            return ToolResult.ok(text.rjust(width, fill))
+        if side == "right":
+            return ToolResult.ok(text.ljust(width, fill))
+        if side == "both":
+            return ToolResult.ok(text.center(width, fill))
+        return ToolResult.fail("side must be 'left', 'right', or 'both'")
