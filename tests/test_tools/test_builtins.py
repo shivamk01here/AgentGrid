@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool
 
 
 class TestDateTimeTool:
@@ -898,4 +898,25 @@ class TestStringCountOccurrencesTool:
     async def test_count_empty_substring(self):
         tool = StringCountOccurrencesTool()
         result = await tool.execute(text="hello", substring="")
+        assert result.success is False
+
+class TestListIndexOfTool:
+    @pytest.mark.asyncio
+    async def test_index_found(self):
+        tool = ListIndexOfTool()
+        result = await tool.execute(items=["a", "b", "c"], value="b")
+        assert result.success is True
+        assert result.output == 1
+
+    @pytest.mark.asyncio
+    async def test_index_not_found(self):
+        tool = ListIndexOfTool()
+        result = await tool.execute(items=["a", "b"], value="z")
+        assert result.success is True
+        assert result.output == -1
+
+    @pytest.mark.asyncio
+    async def test_index_invalid_list(self):
+        tool = ListIndexOfTool()
+        result = await tool.execute(items="not a list", value="a")
         assert result.success is False
