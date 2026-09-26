@@ -1621,3 +1621,38 @@ class StringPadTool(BaseTool):
         if side == "both":
             return ToolResult.ok(text.center(width, fill))
         return ToolResult.fail("side must be 'left', 'right', or 'both'")
+
+class MathPowerTool(BaseTool):
+    """Raises a number to a given exponent."""
+
+    @property
+    def name(self) -> str:
+        return "math_power"
+
+    @property
+    def description(self) -> str:
+        return "Raise a number to the power of an exponent"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "base": {"type": "number", "description": "The base number"},
+                "exponent": {"type": "number", "description": "The exponent"},
+            },
+            "required": ["base", "exponent"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        base = kwargs["base"]
+        exponent = kwargs["exponent"]
+        if not isinstance(base, (int, float)) or isinstance(base, bool):
+            return ToolResult.fail("base must be a number")
+        if not isinstance(exponent, (int, float)) or isinstance(exponent, bool):
+            return ToolResult.fail("exponent must be a number")
+        try:
+            result = base ** exponent
+        except ZeroDivisionError:
+            return ToolResult.fail("cannot raise zero to a negative power")
+        return ToolResult.ok(result)

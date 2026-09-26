@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool, StringPadTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool, StringPadTool, MathPowerTool
 
 
 class TestDateTimeTool:
@@ -947,4 +947,25 @@ class TestStringPadTool:
     async def test_pad_invalid_side(self):
         tool = StringPadTool()
         result = await tool.execute(text="hi", width=5, side="middle")
+        assert result.success is False
+
+class TestMathPowerTool:
+    @pytest.mark.asyncio
+    async def test_power_integer(self):
+        tool = MathPowerTool()
+        result = await tool.execute(base=2, exponent=10)
+        assert result.success is True
+        assert result.output == 1024
+
+    @pytest.mark.asyncio
+    async def test_power_float_exponent(self):
+        tool = MathPowerTool()
+        result = await tool.execute(base=9, exponent=0.5)
+        assert result.success is True
+        assert abs(result.output - 3.0) < 1e-9
+
+    @pytest.mark.asyncio
+    async def test_power_invalid_base(self):
+        tool = MathPowerTool()
+        result = await tool.execute(base="two", exponent=2)
         assert result.success is False
