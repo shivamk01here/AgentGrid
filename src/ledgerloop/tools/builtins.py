@@ -1546,3 +1546,35 @@ class StringCountOccurrencesTool(BaseTool):
         if not substring:
             return ToolResult.fail("substring must not be empty")
         return ToolResult.ok(text.count(substring))
+
+class ListIndexOfTool(BaseTool):
+    """Returns the index of the first occurrence of a value in a list."""
+
+    @property
+    def name(self) -> str:
+        return "list_index_of"
+
+    @property
+    def description(self) -> str:
+        return "Find the index of the first occurrence of a value in a list, or -1 if absent"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "items": {"type": "array", "description": "The list to search"},
+                "value": {"description": "The value to look for"},
+            },
+            "required": ["items", "value"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        items = kwargs["items"]
+        value = kwargs["value"]
+        if not isinstance(items, list):
+            return ToolResult.fail("items must be a list")
+        try:
+            return ToolResult.ok(items.index(value))
+        except ValueError:
+            return ToolResult.ok(-1)
