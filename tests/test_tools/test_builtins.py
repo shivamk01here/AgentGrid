@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool, StringPadTool
 
 
 class TestDateTimeTool:
@@ -919,4 +919,32 @@ class TestListIndexOfTool:
     async def test_index_invalid_list(self):
         tool = ListIndexOfTool()
         result = await tool.execute(items="not a list", value="a")
+        assert result.success is False
+
+class TestStringPadTool:
+    @pytest.mark.asyncio
+    async def test_pad_right(self):
+        tool = StringPadTool()
+        result = await tool.execute(text="hi", width=5)
+        assert result.success is True
+        assert result.output == "hi   "
+
+    @pytest.mark.asyncio
+    async def test_pad_left(self):
+        tool = StringPadTool()
+        result = await tool.execute(text="hi", width=5, side="left")
+        assert result.success is True
+        assert result.output == "   hi"
+
+    @pytest.mark.asyncio
+    async def test_pad_both(self):
+        tool = StringPadTool()
+        result = await tool.execute(text="hi", width=6, side="both")
+        assert result.success is True
+        assert result.output == "  hi  "
+
+    @pytest.mark.asyncio
+    async def test_pad_invalid_side(self):
+        tool = StringPadTool()
+        result = await tool.execute(text="hi", width=5, side="middle")
         assert result.success is False
