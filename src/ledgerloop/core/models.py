@@ -338,6 +338,21 @@ class ApprovalRequest:
         self._assert_pending(ApprovalState.EXPIRED)
         return replace(self, state=ApprovalState.EXPIRED, decided_at=at)
 
+    def withdraw(self, *, at: datetime) -> Self:
+        """Retract a request whose run will never come back to resume it.
+
+        Distinct from `expire`: expiry means the deadline passed with nobody
+        answering, withdrawal means the question stopped applying - the run
+        it was raised for was cancelled out from under it. Both take the
+        request out of a reviewer's queue; only one says a decision was ever
+        still possible when it happened.
+
+        Raises:
+            StateTransitionError: The request is no longer pending.
+        """
+        self._assert_pending(ApprovalState.WITHDRAWN)
+        return replace(self, state=ApprovalState.WITHDRAWN, decided_at=at)
+
     def authorizes(self, action: Action) -> bool:
         """True when this grant covers `action` exactly."""
         return (

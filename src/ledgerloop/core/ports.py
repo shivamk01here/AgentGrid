@@ -351,6 +351,22 @@ class ApprovalGateway(Protocol):
         """
         ...
 
+    async def withdraw(
+        self, tenant_id: TenantId, approval_id: ApprovalId, *, at: datetime
+    ) -> ApprovalRequest | None:
+        """Retract a request whose run was cancelled out from under it.
+
+        Not a verdict, and not an expiry: the deadline may still be days
+        away. A cancelled run is never coming back to resume on this request,
+        so leaving it pending would hold a place in a reviewer's queue for a
+        decision nobody can act on any more.
+
+        Returns:
+            The withdrawn request, or None when there was nothing to
+            withdraw: no such request, or one somebody had already decided.
+        """
+        ...
+
     def list_pending(
         self, tenant_id: TenantId, *, limit: int = 100
     ) -> AsyncIterator[ApprovalRequest]:

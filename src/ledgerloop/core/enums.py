@@ -502,6 +502,7 @@ class LedgerEventType(StrEnum):
     APPROVAL_GRANTED = "approval.granted"
     APPROVAL_REJECTED = "approval.rejected"
     APPROVAL_EXPIRED = "approval.expired"
+    APPROVAL_WITHDRAWN = "approval.withdrawn"
 
 
 @unique

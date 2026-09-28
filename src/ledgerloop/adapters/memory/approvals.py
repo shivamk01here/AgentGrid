@@ -202,6 +202,26 @@ class InMemoryApprovalGateway:
             self._requests[key] = expired
             return expired
 
+    async def withdraw(
+        self, tenant_id: TenantId, approval_id: ApprovalId, *, at: datetime
+    ) -> ApprovalRequest | None:
+        """Retract a request whose run was cancelled out from under it.
+
+        Returns:
+            The withdrawn request, or None when it does not exist or a
+            reviewer had already decided it. A decision that landed before
+            the cancellation is not something withdrawal gets to overwrite.
+        """
+        key = (tenant_id.value, approval_id.value)
+
+        async with self._lock:
+            request = self._requests.get(key)
+            if request is None or request.state is not ApprovalState.PENDING:
+                return None
+            withdrawn = request.withdraw(at=at)
+            self._requests[key] = withdrawn
+            return withdrawn
+
     async def list_pending(
         self, tenant_id: TenantId, *, limit: int = 100
     ) -> AsyncIterator[ApprovalRequest]:
