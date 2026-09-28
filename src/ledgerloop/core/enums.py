@@ -40,8 +40,8 @@ class RunState(StrEnum):
         PENDING     -> RUNNING | CANCELLED
         RUNNING     -> AWAITING_APPROVAL | SUCCEEDED | FAILED
                        | COMPENSATING | CANCELLED | SUSPENDED
-        AWAITING_APPROVAL -> RUNNING | CANCELLED | EXPIRED
-        SUSPENDED   -> RUNNING | CANCELLED | EXPIRED
+        AWAITING_APPROVAL -> RUNNING | CANCELLED | EXPIRED | FAILED
+        SUSPENDED   -> RUNNING | CANCELLED | EXPIRED | FAILED
         COMPENSATING -> COMPENSATED | FAILED
         SUCCEEDED | FAILED | COMPENSATED | CANCELLED | EXPIRED -> (terminal)
     """
@@ -89,8 +89,14 @@ class RunState(StrEnum):
 
     @property
     def is_resumable(self) -> bool:
-        """True when a resume request could legally restart this run."""
-        return self in (RunState.AWAITING_APPROVAL, RunState.SUSPENDED)
+        """True when a resume request could legally restart this run.
+
+        PENDING is in here even though it is not halted: a run that was
+        recorded and never started - the worker died before claiming it - is
+        exactly what a resume is for, and PENDING -> RUNNING is a legal
+        transition.
+        """
+        return self in _RESUMABLE_RUN_STATES
 
 
 _TERMINAL_RUN_STATES = frozenset(
@@ -100,6 +106,16 @@ _TERMINAL_RUN_STATES = frozenset(
         RunState.FAILED,
         RunState.CANCELLED,
         RunState.EXPIRED,
+    }
+)
+
+# Kept in step with `_LEGAL_TRANSITIONS` in core.models: every state that can
+# reach RUNNING by a legal transition, and is not already terminal.
+_RESUMABLE_RUN_STATES = frozenset(
+    {
+        RunState.PENDING,
+        RunState.AWAITING_APPROVAL,
+        RunState.SUSPENDED,
     }
 )
 

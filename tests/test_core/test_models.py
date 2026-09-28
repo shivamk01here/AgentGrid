@@ -42,6 +42,7 @@ from ledgerloop.core.models import (
     RunSpec,
     Step,
     TokenSpend,
+    _LEGAL_TRANSITIONS,
 )
 from ledgerloop.core.money import Money
 
@@ -225,6 +226,16 @@ class TestRunStateSemantics:
         assert RunState.PENDING.is_resumable
         assert RunState.AWAITING_APPROVAL.is_resumable
         assert not RunState.SUCCEEDED.is_resumable
+
+    def test_resumable_agrees_with_the_transition_table(self):
+        # is_resumable promises a resume could legally restart the run, so
+        # every state it claims has to be able to reach RUNNING.
+        for state in RunState:
+            if state.is_resumable:
+                assert RunState.RUNNING in _LEGAL_TRANSITIONS[state], state
+        for state in RunState:
+            if not state.is_resumable:
+                assert RunState.RUNNING not in _LEGAL_TRANSITIONS.get(state, frozenset()), state
 
 
 class TestRunBudget:
