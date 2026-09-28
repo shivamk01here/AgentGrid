@@ -156,3 +156,22 @@ class InMemoryIdempotencyStore:
     def snapshot(self) -> tuple[IdempotencyRecord, ...]:
         """Every stored record. For assertions, not for production reads."""
         return tuple(self._records.values())
+
+    # ---- transactional support --------------------------------------------
+
+    def capture_state(self) -> dict[tuple[str, str], IdempotencyRecord]:
+        """The store's contents, for a unit of work to snapshot.
+
+        Records are frozen and always replaced rather than edited, so a copy
+        of the mapping is a faithful snapshot.
+        """
+        return dict(self._records)
+
+    def restore_state(self, state: dict[tuple[str, str], IdempotencyRecord]) -> None:
+        """Put back exactly what `capture_state` handed out.
+
+        A claim taken inside a transaction that then rolled back is not a
+        settled claim with no receipt - it is no claim at all, so the key is
+        free to be claimed again.
+        """
+        self._records = dict(state)

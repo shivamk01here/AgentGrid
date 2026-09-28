@@ -10,6 +10,7 @@ from ledgerloop.adapters.memory.dispatcher import RecordingDispatcher
 from ledgerloop.adapters.memory.idempotency import InMemoryIdempotencyStore
 from ledgerloop.adapters.memory.ledger import InMemoryLedgerStore
 from ledgerloop.adapters.memory.runs import InMemoryRunStore, InMemoryStepStore
+from ledgerloop.adapters.memory.uow import InMemoryUnitOfWork
 
 __all__ = [
     "ApproverDirectory",
@@ -18,5 +19,6 @@ __all__ = [
     "InMemoryLedgerStore",
     "InMemoryRunStore",
     "InMemoryStepStore",
+    "InMemoryUnitOfWork",
     "RecordingDispatcher",
 ]

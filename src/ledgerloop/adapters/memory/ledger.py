@@ -137,3 +137,23 @@ class InMemoryLedgerStore:
         """
         async with self._registry_lock:
             return self._locks.setdefault(key, asyncio.Lock())
+
+    # ---- transactional support --------------------------------------------
+
+    def capture_state(self) -> dict[tuple[str, str], list[LedgerEntry]]:
+        """The store's contents, for a unit of work to snapshot.
+
+        Each chain is copied because the lists are appended to in place. The
+        lock registry is deliberately not part of this: a lock is a
+        coordination structure, not data, and handing back a stale one would
+        break the very serialization the chain depends on.
+        """
+        return {key: list(chain) for key, chain in self._chains.items()}
+
+    def restore_state(self, state: dict[tuple[str, str], list[LedgerEntry]]) -> None:
+        """Put back exactly what `capture_state` handed out.
+
+        A rolled-back append is not a row with a flag on it: it is absent, so
+        the chain stays dense and the next entry re-uses its sequence number.
+        """
+        self._chains = {key: list(chain) for key, chain in state.items()}

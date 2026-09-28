@@ -178,6 +178,29 @@ class InMemoryRunStore:
         """Every stored run. For assertions, not for production reads."""
         return tuple(self._runs.values())
 
+    # ---- transactional support --------------------------------------------
+
+    def capture_state(
+        self,
+    ) -> tuple[dict[tuple[str, str], Run], dict[tuple[str, str], _Lease]]:
+        """The store's contents, for a unit of work to snapshot.
+
+        Shallow copies of the mappings are enough: the values are frozen
+        dataclasses and no operation here ever mutates one in place, so
+        replacing a key is the only way this store changes.
+        """
+        return dict(self._runs), dict(self._leases)
+
+    def restore_state(
+        self, state: tuple[dict[tuple[str, str], Run], dict[tuple[str, str], _Lease]]
+    ) -> None:
+        """Put back exactly what `capture_state` handed out.
+
+        Discards every run and lease written since the snapshot, including
+        runs created after it.
+        """
+        self._runs, self._leases = dict(state[0]), dict(state[1])
+
     @staticmethod
     def _key(tenant_id: TenantId, run_id: RunId) -> tuple[str, str]:
         return (tenant_id.value, run_id.value)
@@ -223,4 +246,30 @@ class InMemoryStepStore:
         ids = self._by_run.get((tenant_id.value, run_id.value), [])
         steps = [self._steps[(tenant_id.value, i.value)] for i in ids]
         return sorted(steps, key=lambda s: s.index)
+
+    # ---- transactional support --------------------------------------------
+
+    def capture_state(
+        self,
+    ) -> tuple[
+        dict[tuple[str, str], Step],
+        dict[tuple[str, str], list[StepId]],
+    ]:
+        """The store's contents, for a unit of work to snapshot.
+
+        The per-run index holds mutable lists, so those are copied as well as
+        the mapping that points at them.
+        """
+        return dict(self._steps), {key: list(ids) for key, ids in self._by_run.items()}
+
+    def restore_state(
+        self,
+        state: tuple[
+            dict[tuple[str, str], Step],
+            dict[tuple[str, str], list[StepId]],
+        ],
+    ) -> None:
+        """Put back exactly what `capture_state` handed out."""
+        self._steps = dict(state[0])
+        self._by_run = {key: list(ids) for key, ids in state[1].items()}
 
