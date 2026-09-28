@@ -1,7 +1,7 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool, StringPadTool, MathPowerTool
+from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool, StringPadTool, MathPowerTool, DictSizeTool
 
 
 class TestDateTimeTool:
@@ -969,4 +969,26 @@ class TestMathPowerTool:
     async def test_power_invalid_base(self):
         tool = MathPowerTool()
         result = await tool.execute(base="two", exponent=2)
+        assert result.success is False
+
+
+class TestDictSizeTool:
+    @pytest.mark.asyncio
+    async def test_counts_keys(self):
+        tool = DictSizeTool()
+        result = await tool.execute(data={"a": 1, "b": 2, "c": 3})
+        assert result.success is True
+        assert result.output == 3
+
+    @pytest.mark.asyncio
+    async def test_empty_dict_is_zero(self):
+        tool = DictSizeTool()
+        result = await tool.execute(data={})
+        assert result.success is True
+        assert result.output == 0
+
+    @pytest.mark.asyncio
+    async def test_rejects_a_non_dict(self):
+        tool = DictSizeTool()
+        result = await tool.execute(data=["a", "b"])
         assert result.success is False
