@@ -1507,7 +1507,7 @@ class MathClampTool(BaseTool):
         value = kwargs["value"]
         min_val = kwargs["min_val"]
         max_val = kwargs["max_val"]
-        for name, v in ((""value", value), ("min_val", min_val), ("max_val", max_val)):
+        for name, v in (("value", value), ("min_val", min_val), ("max_val", max_val)):
             if not isinstance(v, (int, float)) or isinstance(v, bool):
                 return ToolResult.fail(f"{name} must be a number")
         if min_val > max_val:
