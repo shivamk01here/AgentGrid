@@ -205,6 +205,35 @@ is worse than either end of it, so it is reported rather than rounded up.
 python examples/rolled_back_batch.py
 ```
 
+## A run that never lies about what it did
+
+The ledger is the audit trail, so the entry explaining a state change has to
+land in the same transaction as the change itself. A run that reaches
+`SUCCEEDED` while its ledger has no entry saying so is worse than a run that
+failed: the first one gets believed.
+
+```python
+uow = InMemoryUnitOfWork(runs, steps, ledger, idempotency)
+
+async with uow:
+    await uow.runs.save(run.succeed(at=now), expected_version=version)
+    await uow.ledger.append(
+        run.id, tenant_id, LedgerEventType.RUN_COMPLETED, {}, occurred_at=now
+    )
+    await uow.idempotency.settle(key, tenant_id, receipt, at=now)
+```
+
+Writes are visible inside the block, the way they are in a database session,
+so the code reads normally. Leaving the block cleanly is what makes them real:
+if any of it raises, none of it is in the stores, the run is still where it
+was, and the chain has no entry claiming otherwise.
+
+Two details that are easy to get wrong. A rolled-back ledger append leaves no
+gap in the sequence numbers, because a hole in the chain is indistinguishable
+from a deleted row. And a rolled-back claim frees the key rather than leaving
+an `IN_FLIGHT` record behind — the reconciler reads that as a payment whose
+fate is unknown, and goes looking for a receipt nobody has.
+
 ## A run that knows when to stop
 
 Policy decides whether one action may go. A run's budget decides how much the
@@ -304,6 +333,7 @@ ledgerloop/
 | Reaper — expiry of halted runs | Implemented — deadline-driven, retires the request behind it |
 | Run value ceiling | Implemented — checked before dispatch and approval, counts unanswered effects |
 | Idempotency, ledger, run, step stores | Implemented **in memory only** |
+| Unit of work — a run's state and its ledger entries commit together | Implemented **in memory only** |
 | Durable (Postgres) adapters | Not started |
 | Action dispatchers (PSP, bank) | Not started — port defined, fake for tests only |
 | Dashboard | Not started |

@@ -35,6 +35,13 @@ class TestTopLevelExports:
         assert hasattr(ledgerloop, "MetricsCollector")
         assert hasattr(ledgerloop, "get_logger")
 
+    def test_adapters_symbols(self):
+        for name in [
+            "InMemoryUnitOfWork",
+            "RecordingDispatcher",
+        ]:
+            assert hasattr(ledgerloop, name)
+
     def test_auth_symbols(self):
         assert hasattr(ledgerloop, "Authenticator")
         assert hasattr(ledgerloop, "Permission")

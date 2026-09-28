@@ -8,6 +8,7 @@ from ledgerloop.adapters.memory import (
     InMemoryLedgerStore,
     InMemoryRunStore,
     InMemoryStepStore,
+    InMemoryUnitOfWork,
     RecordingDispatcher,
 )
 from ledgerloop.agent.base import Agent, AgentConfig
@@ -104,6 +105,7 @@ __all__ = [
     "RateLimitResult",
     "RateLimitMiddleware",
     "RateLimitExceeded",
+    "InMemoryUnitOfWork",
     "RecordingDispatcher",
     "ActionExecutor",
     "ActionResult",

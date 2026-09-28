@@ -8,10 +8,11 @@ the port exists to make impossible.
 
 from __future__ import annotations
 
-from types import TracebackType
 from typing import TYPE_CHECKING, Any, Protocol, Self
 
 if TYPE_CHECKING:
+    from types import TracebackType
+
     from ledgerloop.core.ports import IdempotencyStore, LedgerStore, RunStore, StepStore
 
 __all__ = ["InMemoryUnitOfWork"]
@@ -114,6 +115,10 @@ class InMemoryUnitOfWork:
         # Nothing is suppressed: a failure inside the block leaves the stores
         # as they were and the exception keeps going, which is the behaviour
         # a caller wrapping this in try/except will assume.
+        if not self.in_transaction:
+            # An explicit commit() or rollback() inside the block already
+            # ended it, and that decision stands.
+            return
         if exc_type is None:
             await self.commit()
         else:
