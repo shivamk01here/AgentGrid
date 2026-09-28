@@ -263,7 +263,7 @@ class TestJsonPathTool:
         assert "Invalid JSON" in result.error
 
 import io
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 class TestHttpTool:
     @pytest.mark.asyncio
@@ -295,8 +295,9 @@ class TestSleepTool:
     @pytest.mark.asyncio
     async def test_sleep_success(self):
         tool = SleepTool()
-        # Mock asyncio.sleep to not actually wait
-        with patch('asyncio.sleep', new_callable=MagicMock) as mock_sleep:
+        # Mock asyncio.sleep to not actually wait. The tool awaits it, so the
+        # stand-in has to be awaitable too.
+        with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
             result = await tool.execute(seconds=2.5)
             mock_sleep.assert_called_once_with(2.5)
             assert result.success is True

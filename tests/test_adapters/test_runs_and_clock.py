@@ -85,8 +85,10 @@ class TestRunStore:
             tenant_id=tenant, objective="Halted", deadline=AT + timedelta(hours=1)
         )
         run = await store.create(spec)
-        halted = run.start(at=AT).suspend(at=AT)
-        await store.save(halted, expected_version=1)
+        # Two transitions, so two saves: the second write is only accepted
+        # against the version the first one left behind.
+        started = await store.save(run.start(at=AT), expected_version=0)
+        await store.save(started.suspend(at=AT), expected_version=1)
 
         found = [r async for r in store.find_expired(as_of=AT + timedelta(hours=2))]
         assert [r.id for r in found] == [run.id]

@@ -101,9 +101,11 @@ class TestWorkflowEngine:
             return step.name
 
         engine = WorkflowEngine()
-        engine.add_step(Step(name="c", handler=track, dependencies=["b"]))
+        # add_step checks that a dependency is registered, so the steps go in
+        # dependency order; the engine is the one that executes them in it.
         engine.add_step(Step(name="a", handler=track))
         engine.add_step(Step(name="b", handler=track, dependencies=["a"]))
+        engine.add_step(Step(name="c", handler=track, dependencies=["b"]))
         await engine.run()
         assert order == ["a", "b", "c"]
 

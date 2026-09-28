@@ -31,6 +31,19 @@ class FailTool(BaseTool):
         return ToolResult.fail("intentional failure")
 
 
+class ExplodingTool(BaseTool):
+    @property
+    def name(self) -> str:
+        return "boom"
+
+    @property
+    def description(self) -> str:
+        return "Raises"
+
+    async def execute(self, **kwargs) -> ToolResult:
+        raise RuntimeError("intentional failure")
+
+
 class TestToolRegistry:
     def test_register_tool(self, tool_registry):
         tool_registry.register(EchoTool())
@@ -62,10 +75,18 @@ class TestToolRegistry:
 
     @pytest.mark.asyncio
     async def test_invoke_tool_catches_exceptions(self, tool_registry):
+        tool_registry.register(ExplodingTool())
+        result = await tool_registry.invoke("boom")
+        assert result.success is False
+        assert "raised" in result.error
+        assert "intentional failure" in result.error
+
+    @pytest.mark.asyncio
+    async def test_a_tool_that_reports_failure_is_passed_through(self, tool_registry):
         tool_registry.register(FailTool())
         result = await tool_registry.invoke("fail")
         assert result.success is False
-        assert "raised" in result.error
+        assert result.error == "intentional failure"
 
     @pytest.mark.asyncio
     async def test_invoke_unknown_tool(self, tool_registry):

@@ -119,6 +119,8 @@ class TestAgentRuntime:
         cfg = RateLimitConfig(max_requests=1, window_seconds=60, burst=1)
         limiter = RateLimiter(cfg)
         runtime = AgentRuntime(agent, rate_limiter=limiter)
+        # burst=1 lets the first run through; the second is over the limit.
+        assert (await runtime.execute("hello"))["success"] is True
         result = await runtime.execute("hello")
         assert result["success"] is False
         assert "duration" in result
