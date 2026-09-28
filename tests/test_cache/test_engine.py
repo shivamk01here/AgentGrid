@@ -100,6 +100,16 @@ class TestCacheEngine:
         assert len(results) == 2
 
     @pytest.mark.asyncio
+    async def test_search_does_not_leak_the_stored_entrys_tags(self):
+        engine = CacheEngine(namespace="test")
+        await engine.set("k1", "v1", tags=["original"])
+        results = await engine.search(prefix="k1")
+        results[0].tags.append("mutated")
+
+        fresh = await engine.search(tag="mutated")
+        assert fresh == []
+
+    @pytest.mark.asyncio
     async def test_search_isolation_across_namespaces(self):
         backend = InMemoryCache()
         engine_a = CacheEngine(namespace="a", backend=backend)

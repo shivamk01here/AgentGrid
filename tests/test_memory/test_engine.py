@@ -94,6 +94,24 @@ class TestMemoryEngine:
         assert keys == {"k1", "k2"}
 
     @pytest.mark.asyncio
+    async def test_list_all_does_not_leak_the_stored_entry(self, memory_engine):
+        await memory_engine.store("k1", "v1", tags=["original"])
+        entries = await memory_engine.list_all()
+        entries[0].tags.append("mutated")
+
+        fresh = await memory_engine.search(tag="mutated")
+        assert fresh == []
+
+    @pytest.mark.asyncio
+    async def test_search_does_not_leak_the_stored_entry(self, memory_engine):
+        await memory_engine.store("k1", "v1", tags=["original"])
+        found = await memory_engine.search(tag="original")
+        found[0].tags.append("mutated")
+
+        fresh = await memory_engine.search(tag="mutated")
+        assert fresh == []
+
+    @pytest.mark.asyncio
     async def test_list_all_excludes_expired(self):
         engine = MemoryEngine(namespace="test")
         await engine.store("alive", "yes")

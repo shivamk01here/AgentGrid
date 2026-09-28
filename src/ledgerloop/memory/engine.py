@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import replace
 from typing import Any
 
 from ledgerloop.memory.backend import MemoryBackend
@@ -123,13 +124,13 @@ class MemoryEngine:
                 continue
             if prefix and not entry.key.startswith(prefix):
                 continue
-            results.append(entry)
+            results.append(_copy(entry))
         return results
 
     async def list_all(self) -> list[MemoryEntry]:
         """Return all non-expired entries in this namespace."""
         entries = await self._backend.list_all()
-        return [e for e in entries if e.namespace == self.namespace]
+        return [_copy(e) for e in entries if e.namespace == self.namespace]
 
     async def clear(self) -> int:
         """Clear all entries in this namespace. Returns count removed."""
@@ -149,3 +150,14 @@ class MemoryEngine:
     def _key(self, key: str) -> str:
         """Where `key` lives in a backend this namespace may be sharing."""
         return f"{self.namespace}:{key}"
+
+
+def _copy(entry: MemoryEntry) -> MemoryEntry:
+    """Detach a returned entry from the backend's own copy.
+
+    `MemoryEntry` is a plain mutable dataclass, and `list_all`/`search` would
+    otherwise hand back the exact object the backend has stored - a caller
+    appending to `.tags` on what looks like a query result would silently
+    edit the store with no `store()` call to show for it.
+    """
+    return replace(entry, tags=list(entry.tags))

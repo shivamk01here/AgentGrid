@@ -136,7 +136,11 @@ class CacheEngine:
                 key=raw_key,
                 value=entry.value,
                 ttl=entry.ttl,
-                tags=entry.tags,
+                # Copied, not aliased: entry.tags is the same list object the
+                # backend has stored, and a caller mutating the list handed
+                # back here would edit the live cache entry with no set() to
+                # show for it.
+                tags=list(entry.tags),
                 created_at=entry.created_at,
             ))
         return results
