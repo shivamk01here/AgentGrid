@@ -1656,3 +1656,30 @@ class MathPowerTool(BaseTool):
         except ZeroDivisionError:
             return ToolResult.fail("cannot raise zero to a negative power")
         return ToolResult.ok(result)
+
+class DictSizeTool(BaseTool):
+    """Returns the number of keys in a dictionary."""
+
+    @property
+    def name(self) -> str:
+        return "dict_size"
+
+    @property
+    def description(self) -> str:
+        return "Count the number of keys in a dictionary"
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "data": {"type": "object", "description": "The dictionary to measure"},
+            },
+            "required": ["data"],
+        }
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        data = kwargs["data"]
+        if not isinstance(data, dict):
+            return ToolResult.fail("data must be a dictionary")
+        return ToolResult.ok(len(data))

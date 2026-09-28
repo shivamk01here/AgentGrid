@@ -49,6 +49,7 @@ from ledgerloop.tools.builtins import (
     ListIndexOfTool,
     StringPadTool,
     MathPowerTool,
+    DictSizeTool,
 )
 
 __all__ = [
@@ -103,4 +104,5 @@ __all__ = [
     "ListIndexOfTool",
     "StringPadTool",
     "MathPowerTool",
+    "DictSizeTool",
 ]
