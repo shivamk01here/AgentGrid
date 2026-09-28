@@ -565,7 +565,10 @@ class Currency(StrEnum):
     @property
     def minor_units_per_major(self) -> int:
         """How many minor units make one major unit - 100 for USD, 1 for JPY."""
-        return 10**self.exponent
+        # `int ** int` is typed `Any` in typeshed because a negative exponent
+        # would return a float; `exponent` is never negative, so make that an
+        # `int` on the way out rather than an unchecked `Any`.
+        return int(10**self.exponent)
 
 
 _CURRENCY_EXPONENTS: dict[Currency, int] = {
