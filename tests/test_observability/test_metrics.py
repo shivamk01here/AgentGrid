@@ -53,15 +53,30 @@ class TestMetricsCollector:
     def test_summary_empty(self):
         m = MetricsCollector()
         s = m.summary()
-        assert s == {"counters": {}, "gauges": {}}
+        assert s == {"counters": {}, "gauges": {}, "histograms": {}}
 
     def test_reset(self):
         m = MetricsCollector()
         m.increment("x")
         m.gauge("y", 1.0)
+        m.histogram("z", 1.0)
         m.reset()
         s = m.summary()
-        assert s == {"counters": {}, "gauges": {}}
+        assert s == {"counters": {}, "gauges": {}, "histograms": {}}
+
+    def test_histogram(self):
+        m = MetricsCollector()
+        m.histogram("latency", 1.0)
+        m.histogram("latency", 2.0)
+        m.histogram("latency", 3.0)
+        stats = m.summary()["histograms"]["latency"]
+        assert stats == {"count": 3, "sum": 6.0, "min": 1.0, "max": 3.0, "avg": 2.0}
+
+    def test_histogram_with_tags(self):
+        m = MetricsCollector()
+        m.histogram("latency", 5.0, tags={"route": "/refund"})
+        summary = m.summary()
+        assert summary["histograms"]["latency{route=/refund}"]["count"] == 1
 
     def test_make_key_no_tags(self):
         assert MetricsCollector._make_key("name", None) == "name"
