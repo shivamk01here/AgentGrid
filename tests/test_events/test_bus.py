@@ -72,6 +72,63 @@ class TestEventBus:
         assert event_bus.get_history(limit=-1) == []
 
     @pytest.mark.asyncio
+    async def test_handler_may_subscribe_while_the_event_is_being_delivered(self, event_bus):
+        received = []
+
+        async def late(event: Event):
+            received.append("late")
+
+        async def subscribing(event: Event):
+            received.append("subscribing")
+            event_bus.subscribe("other", late)
+
+        event_bus.subscribe("test", subscribing)
+        count = await event_bus.emit(Event(topic="test"))
+
+        assert count == 1
+        assert received == ["subscribing"]
+        # And the new subscriber works from the next event on.
+        await event_bus.emit(Event(topic="other"))
+        assert received == ["subscribing", "late"]
+
+    @pytest.mark.asyncio
+    async def test_handler_may_unsubscribe_while_the_event_is_being_delivered(self, event_bus):
+        received = []
+
+        async def second(event: Event):
+            received.append("second")
+
+        async def cancelling(event: Event):
+            received.append("cancelling")
+            assert event_bus.unsubscribe("test", second) is True
+
+        event_bus.subscribe("test", cancelling)
+        event_bus.subscribe("test", second)
+        count = await event_bus.emit(Event(topic="test"))
+
+        # The snapshot was taken at publish time, so the pair that was
+        # subscribed then is still delivered to.
+        assert count == 2
+        assert received == ["cancelling", "second"]
+
+    @pytest.mark.asyncio
+    async def test_a_handler_can_emit_from_inside_itself(self, event_bus):
+        seen = []
+
+        async def outer(event: Event):
+            seen.append(event.topic)
+            if event.topic == "a":
+                await event_bus.emit(Event(topic="b"))
+
+        async def inner(event: Event):
+            seen.append(event.topic)
+
+        event_bus.subscribe("a", outer)
+        event_bus.subscribe("b", inner)
+        await event_bus.emit(Event(topic="a"))
+        assert seen == ["a", "b"]
+
+    @pytest.mark.asyncio
     async def test_handler_error_does_not_crash(self, event_bus):
         async def bad_handler(event: Event):
             raise RuntimeError("oops")

@@ -69,19 +69,28 @@ class EventBus:
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history:]
 
+        # Subscribers present when the event was published get it, and only
+        # those: a handler is free to subscribe or unsubscribe - or emit an
+        # event of its own - while we are awaiting it, and that must not
+        # disturb the delivery in flight.
+        matched = [
+            handlers
+            for pattern, handlers in list(self._handlers.items())
+            if self._matches(pattern, event.topic)
+        ]
+        targets = [handler for handlers in matched for handler in list(handlers)]
+
         invoked = 0
-        for topic_pattern, handlers in self._handlers.items():
-            if self._matches(topic_pattern, event.topic):
-                for handler in handlers:
-                    try:
-                        await handler(event)
-                        invoked += 1
-                    except Exception:
-                        logger.exception(
-                            "Handler error for event=%s topic=%s",
-                            event.event_id,
-                            event.topic,
-                        )
+        for handler in targets:
+            try:
+                await handler(event)
+                invoked += 1
+            except Exception:
+                logger.exception(
+                    "Handler error for event=%s topic=%s",
+                    event.event_id,
+                    event.topic,
+                )
         return invoked
 
     def get_history(self, topic: str | None = None, limit: int = 50) -> list[Event]:
