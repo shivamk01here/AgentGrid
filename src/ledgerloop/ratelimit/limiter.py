@@ -13,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RateLimitResult:
-    """Result of a rate-limit check."""
+    """Result of a rate-limit check.
+
+    `limit` and `remaining` describe the bucket that actually enforced the
+    request, which is not always the configured `max_requests`: `burst` raises
+    the capacity. `retry_after` is the wait, in seconds, for a caller that was
+    refused; it is None when the caller was let through.
+    """
 
     allowed: bool
     remaining: float
@@ -46,19 +52,20 @@ class RateLimiter:
         return self._buckets[key]
 
     async def acquire(self, key: str = "default", tokens: int = 1) -> RateLimitResult:
-        """Attempt to acquire *tokens* for *key*, blocking if necessary."""
+        """Acquire *tokens* for *key*, blocking until they are available.
+
+        The bucket's consume() waits rather than refusing, so this cannot deny
+        and never reports a retry_after - the caller has its tokens by the
+        time it returns.
+        """
         bucket = self._get_bucket(key)
         allowed = await bucket.consume(tokens)
-
-        if allowed:
-            self._stats[key]["allowed"] += 1
-        else:
-            self._stats[key]["denied"] += 1
+        self._stats[key]["allowed"] += 1
 
         return RateLimitResult(
             allowed=allowed,
             remaining=bucket.tokens,
-            limit=self._config.max_requests,
+            limit=bucket.capacity,
         )
 
     async def try_acquire(self, key: str = "default", tokens: int = 1) -> RateLimitResult:
@@ -71,12 +78,15 @@ class RateLimiter:
         else:
             self._stats[key]["denied"] += 1
 
+        # One read, so the two numbers agree with each other and with the
+        # decision above: what is left and how long until it is one are
+        # answers to the same question.
         current_tokens = bucket.tokens
         return RateLimitResult(
             allowed=allowed,
             remaining=current_tokens,
-            limit=self._config.max_requests,
-            retry_after=(tokens - current_tokens) / bucket._refill_rate if not allowed else None,
+            limit=bucket.capacity,
+            retry_after=None if allowed else (tokens - current_tokens) / bucket.refill_rate,
         )
 
     def get_stats(self, key: str = "default") -> dict[str, int]:

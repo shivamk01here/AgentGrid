@@ -37,6 +37,11 @@ class TokenBucket:
         return self._capacity
 
     @property
+    def refill_rate(self) -> float:
+        """Tokens added per second. Callers need it to say how long to wait."""
+        return self._refill_rate
+
+    @property
     def tokens(self) -> float:
         self._refill()
         return self._tokens

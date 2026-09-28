@@ -13,6 +13,12 @@ from ledgerloop.ratelimit.middleware import RateLimitExceeded, RateLimitMiddlewa
 # ── RateLimitConfig ──────────────────────────────────────────────
 
 
+@pytest.fixture
+def limiter():
+    cfg = RateLimitConfig(max_requests=5, window_seconds=60.0, burst=5)
+    return RateLimiter(cfg)
+
+
 class TestRateLimitConfig:
     def test_defaults(self):
         cfg = RateLimitConfig()
@@ -106,11 +112,6 @@ class TestTokenBucket:
 
 
 class TestRateLimiter:
-    @pytest.fixture
-    def limiter(self):
-        cfg = RateLimitConfig(max_requests=5, window_seconds=60.0, burst=5)
-        return RateLimiter(cfg)
-
     def test_acquire_success(self, limiter):
         result = asyncio.get_event_loop().run_until_complete(limiter.acquire("a"))
         assert result.allowed is True
@@ -124,6 +125,29 @@ class TestRateLimiter:
         result = asyncio.get_event_loop().run_until_complete(rl.try_acquire("x"))
         assert result.allowed is False
         assert result.retry_after is not None
+
+    def test_limit_is_the_capacity_that_was_enforced(self):
+        # burst is what the bucket holds, so that is what a caller has to be
+        # told - max_requests is only the refill budget over the window.
+        cfg = RateLimitConfig(max_requests=5, window_seconds=60.0, burst=20)
+        rl = RateLimiter(cfg)
+        result = asyncio.get_event_loop().run_until_complete(rl.try_acquire("k"))
+        assert result.limit == 20
+        assert result.remaining == pytest.approx(19.0, abs=0.5)
+
+    def test_retry_after_agrees_with_remaining(self):
+        cfg = RateLimitConfig(max_requests=5, window_seconds=60.0, burst=5)
+        rl = RateLimiter(cfg)
+        loop = asyncio.get_event_loop()
+        for _ in range(5):
+            loop.run_until_complete(rl.try_acquire("k"))
+        result = loop.run_until_complete(rl.try_acquire("k"))
+
+        assert result.allowed is False
+        # remaining + refill_rate * retry_after is the one token the caller
+        # asked for, to within the time it took to run the two assertions.
+        rate = cfg.max_requests / cfg.window_seconds
+        assert result.remaining + rate * result.retry_after == pytest.approx(1.0, abs=0.05)
 
     def test_per_key_isolation(self, limiter):
         for _ in range(5):
