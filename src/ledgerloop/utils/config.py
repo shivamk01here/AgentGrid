@@ -15,7 +15,7 @@ def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]
 
     Args:
         path: Path to the .env file.
-        apply: If True, set non-existing keys in os.environ.
+        apply: If True, set keys missing from os.environ.
 
     Returns:
         Dict of key-value pairs loaded from the file.
@@ -39,11 +39,15 @@ def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]
             if " #" in value:
                 value = value.split(" #", 1)[0]
             value = value.strip('"').strip("'")
-            if key not in os.environ:
-                config[key] = value
+            config[key] = value
 
     if apply:
+        # The file is not allowed to win over a variable somebody exported
+        # before we were started, but reading the value back is still
+        # correct: `os.environ` keeps the exported one, and the caller gets
+        # to see what the file asked for.
         for key, value in config.items():
-            os.environ[key] = value
+            if key not in os.environ:
+                os.environ[key] = value
 
     return config
