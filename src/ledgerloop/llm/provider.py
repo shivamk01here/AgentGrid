@@ -49,10 +49,15 @@ class TokenUsage:
 class LLMResponse:
     """One model turn, normalized across providers.
 
-    `raw_content` carries the provider's native assistant content. The agent
-    loop appends it to the transcript verbatim and never inspects it - some
-    providers require their own blocks (reasoning, signatures) to be echoed
-    back byte-for-byte on the following request.
+    `raw_content` carries the provider's native assistant turn. The agent
+    loop appends it to the transcript unedited and never inspects it - some
+    providers require their own blocks (reasoning, signatures, tool calls)
+    to be echoed back byte-for-byte on the following request.
+
+    A provider whose assistant turn is a single content value returns that
+    value and the loop supplies the role; a provider whose turn carries more
+    than content (OpenAI puts `tool_calls` beside it) returns the whole turn
+    as a mapping.
     """
 
     text: str
@@ -110,8 +115,8 @@ class LLMProvider(Protocol):
 
         Args:
             system: System prompt. Kept stable across turns so it stays cached.
-            messages: Transcript. Assistant entries hold provider-native content
-                previously returned as `LLMResponse.raw_content`.
+            messages: Transcript. Assistant entries hold the provider-native
+                turn previously returned as `LLMResponse.raw_content`.
             tools: Tool definitions as `{name, description, parameters}`.
             effort: Reasoning depth - low, medium, high, xhigh, or max.
             max_tokens: Ceiling for this response.

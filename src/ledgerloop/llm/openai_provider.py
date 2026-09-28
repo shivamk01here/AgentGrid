@@ -121,6 +121,24 @@ class OpenAIProvider:
                     ToolCall(id=call.id, name=call.function.name, arguments=args)
                 )
 
+        # The assistant turn we echo back has to carry the tool calls, not
+        # just the prose: a tool message that follows has nothing to match a
+        # tool_call_id against otherwise. `arguments` goes back as the string
+        # OpenAI sent it.
+        raw: dict[str, Any] = {"role": "assistant", "content": message.content}
+        if message.tool_calls:
+            raw["tool_calls"] = [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {
+                        "name": call.function.name,
+                        "arguments": call.function.arguments,
+                    },
+                }
+                for call in message.tool_calls
+            ]
+
         usage = response.usage
         return LLMResponse(
             text="".join(text_parts),
@@ -130,7 +148,7 @@ class OpenAIProvider:
                 input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
                 output_tokens=getattr(usage, "completion_tokens", 0) or 0,
             ),
-            raw_content=message.model_dump(exclude_none=True),
+            raw_content=raw,
         )
 
     @staticmethod

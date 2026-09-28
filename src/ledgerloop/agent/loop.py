@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -131,8 +132,15 @@ class AgentLoop:
             )
             total_usage = total_usage + response.usage
 
-            # Appended verbatim: provider-native blocks must round-trip unedited.
-            messages.append({"role": "assistant", "content": response.raw_content})
+            # Appended unedited: a provider's native assistant turn has to
+            # round-trip, and tool calls live in the turn itself rather than
+            # in its content slot. A provider that hands back bare content
+            # gets the conventional envelope instead.
+            native = response.raw_content
+            if isinstance(native, Mapping):
+                messages.append(dict(native))
+            else:
+                messages.append({"role": "assistant", "content": native})
 
             if response.refused:
                 steps.append(self._step(index, response, ()))

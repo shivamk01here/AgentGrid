@@ -7,7 +7,7 @@ class DummyMessage:
     def __init__(self, content, tool_calls=None):
         self.content = content
         self.tool_calls = tool_calls or []
-        self.model_dump = lambda exclude_none: {"role": "assistant"}
+
 
 class DummyChoice:
     def __init__(self, message, finish_reason="stop"):
@@ -67,6 +67,21 @@ async def test_openai_provider_complete():
     assert len(response.tool_calls) == 0
 
 @pytest.mark.asyncio
+async def test_openai_provider_returns_an_echoable_assistant_turn():
+    client = DummyOpenAIClient()
+    provider = OpenAIProvider(client=client, model="gpt-4o")
+
+    response = await provider.complete(
+        system="You are an assistant",
+        messages=[{"role": "user", "content": "Hi"}],
+    )
+
+    # The loop drops this into the transcript as-is, so it has to be a turn
+    # the API will accept, not a dump of the SDK's response object.
+    assert response.raw_content == {"role": "assistant", "content": "Hello from OpenAI"}
+
+
+@pytest.mark.asyncio
 async def test_openai_provider_tool_calls():
     client = DummyOpenAIClient()
     
@@ -91,6 +106,40 @@ async def test_openai_provider_tool_calls():
     assert len(response.tool_calls) == 1
     assert response.tool_calls[0].name == "get_weather"
     assert response.tool_calls[0].arguments == {"location": "London"}
+
+@pytest.mark.asyncio
+async def test_openai_provider_echoes_the_tool_calls_it_parsed():
+    client = DummyOpenAIClient()
+
+    class ToolCompletions:
+        async def create(self, **kwargs):
+            func = DummyToolCallFunction(name="get_weather", arguments='{"location": "London"}')
+            call = DummyToolCall(id="call_123", function=func)
+            return DummyResponse(
+                choices=[DummyChoice(DummyMessage(content=None, tool_calls=[call]), finish_reason="tool_calls")],
+                usage=DummyUsage()
+            )
+
+    client.chat.completions = ToolCompletions()
+
+    provider = OpenAIProvider(client=client, model="gpt-4o")
+    response = await provider.complete(
+        system="",
+        messages=[{"role": "user", "content": "weather"}],
+        tools=[{"name": "get_weather", "description": "Gets weather"}]
+    )
+
+    # The tool message that follows is keyed on call_123, so the assistant
+    # turn has to keep it - and keep the arguments string exactly as sent.
+    assert response.raw_content["tool_calls"] == [
+        {
+            "id": "call_123",
+            "type": "function",
+            "function": {"name": "get_weather", "arguments": '{"location": "London"}'},
+        }
+    ]
+    assert response.raw_content["content"] is None
+
 
 def test_openai_build_tool_result_messages():
     provider = OpenAIProvider(client=DummyOpenAIClient())
