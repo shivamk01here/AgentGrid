@@ -117,6 +117,35 @@ class TestWorkflowEngine:
         assert results["s2"].success is True
 
     @pytest.mark.asyncio
+    async def test_run_does_not_write_into_the_callers_context(self):
+        engine = WorkflowEngine()
+        engine.add_step(Step(name="s1", handler=noop_handler))
+        engine.add_step(Step(name="s2", handler=noop_handler, dependencies=["s1"]))
+
+        initial = {"init": True}
+        await engine.run(initial)
+
+        assert initial == {"init": True}
+
+    @pytest.mark.asyncio
+    async def test_a_rerun_does_not_inherit_the_previous_runs_outputs(self):
+        seen = []
+
+        async def record(step: Step, ctx: dict) -> str:
+            seen.append(dict(ctx))
+            return step.name
+
+        engine = WorkflowEngine()
+        engine.add_step(Step(name="s1", handler=record))
+
+        initial = {"init": True}
+        await engine.run(initial)
+        await engine.run(initial)
+
+        assert seen[0] == {"init": True}
+        assert seen[1] == {"init": True}
+
+    @pytest.mark.asyncio
     async def test_stops_on_failure(self):
         engine = WorkflowEngine()
         engine.add_step(Step(name="a", handler=failing_handler))

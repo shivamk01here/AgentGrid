@@ -57,12 +57,16 @@ class WorkflowEngine:
         """Execute all steps in dependency order.
 
         Args:
-            initial_context: Starting context passed to all steps.
+            initial_context: Starting context passed to all steps. Copied, so
+                the dict the caller handed in is not written to.
 
         Returns:
             A dict mapping step names to their results.
         """
-        context = initial_context or {}
+        # Step outputs land in the context as they complete, so a shared
+        # reference would leave the caller's dict holding this run's
+        # intermediate state - and hand it to the next run as input.
+        context: dict[str, Any] = dict(initial_context or {})
         results: dict[str, StepResult] = {}
 
         logger.info(
