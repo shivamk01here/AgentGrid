@@ -18,7 +18,7 @@ from ledgerloop.adapters.memory import (
     InMemoryRunStore,
     RecordingDispatcher,
 )
-from ledgerloop.core.enums import ActionKind, Currency, RiskTier, RunState
+from ledgerloop.core.enums import ActionKind, ApprovalState, Currency, RiskTier, RunState
 from ledgerloop.core.errors import PolicyViolationError, StateTransitionError
 from ledgerloop.core.ids import ActionId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, RunSpec
@@ -395,3 +395,74 @@ class TestValueMoved:
         assert result.outcome.succeeded
         assert dispatcher.dispatch_count == 1
         assert result.run.value_moved is None
+
+
+class TestCancel:
+    async def test_cancelling_a_running_run(self, coordinator, runs, tenant):
+        run = await _running_run(runs, tenant)
+
+        cancelled = await coordinator.cancel(run)
+
+        assert cancelled.state is RunState.CANCELLED
+        stored = await runs.get(tenant, run.id)
+        assert stored.state is RunState.CANCELLED
+
+    async def test_the_cancellation_is_ledgered(self, coordinator, runs, ledger, tenant):
+        run = await _running_run(runs, tenant)
+
+        await coordinator.cancel(run, reason="Duplicate case")
+
+        entry = next(
+            e
+            for e in await ledger.read(tenant, run.id)
+            if e.event_type.value == "run.cancelled"
+        )
+        assert entry.payload["reason"] == "Duplicate case"
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_cancelling_a_halted_run_withdraws_its_approval(
+        self, coordinator, runs, gateway, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        halted = await coordinator.propose(run, _refund("50000"))
+
+        cancelled = await coordinator.cancel(halted.run)
+
+        assert cancelled.state is RunState.CANCELLED
+        request = await gateway.get(tenant, halted.approval_id)
+        assert request.state is ApprovalState.WITHDRAWN
+
+    async def test_a_granted_approval_is_not_overwritten_by_a_late_cancel(
+        self, coordinator, runs, gateway, tenant, clock
+    ):
+        # The approval already carries a decision. Cancelling the run after
+        # the fact must not rewrite that decision into a withdrawal.
+        run = await _running_run(runs, tenant)
+        halted = await coordinator.propose(run, _refund("50000"))
+        await gateway.submit(
+            tenant, halted.approval_id, approved=True, actor=APPROVER, at=clock.now()
+        )
+
+        await coordinator.cancel(halted.run)
+
+        request = await gateway.get(tenant, halted.approval_id)
+        assert request.state is ApprovalState.GRANTED
+
+    async def test_a_cancelled_run_cannot_be_cancelled_again(self, coordinator, runs, tenant):
+        run = await _running_run(runs, tenant)
+        cancelled = await coordinator.cancel(run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.cancel(cancelled)
+
+    async def test_a_withdrawn_approval_cannot_resume_the_run(
+        self, coordinator, runs, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        action = _refund("50000")
+        halted = await coordinator.propose(run, action)
+
+        cancelled = await coordinator.cancel(halted.run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.resume(cancelled, action)

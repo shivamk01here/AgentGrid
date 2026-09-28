@@ -289,6 +289,35 @@ it halted, and walking that back is the compensator's job.
 python examples/expired_approval.py
 ```
 
+## A case that gets called off
+
+Not every halted run is waiting on a deadline that quietly passes — a case
+can get resolved another way, a duplicate can turn up, an operator can just
+say stop. The coordinator can cancel a run directly, and if it was sitting
+on an approval, that request is retired in the same call rather than left
+PENDING for a reviewer to find later.
+
+```python
+cancelled = await coordinator.cancel(halted.run, reason="Duplicate case")
+# -> run is CANCELLED, and the approval it was waiting on is WITHDRAWN
+```
+
+The run moves first, under its own version check, the same order the reaper
+uses and for the same reason: a worker that had just resumed the run onto a
+fresh grant must not have that grant pulled out from under it because a
+cancel request arrived a moment later and lost the race cleanly instead.
+
+Withdrawal is not expiry wearing a different label. Expiry means a deadline
+passed with nobody answering; withdrawal means the question stopped applying
+before anyone had to answer it. Either way a decision that already landed
+stands — cancelling a run after its approval was granted retires nothing,
+because the grant is the true record of what happened and a cancellation
+does not get to rewrite it.
+
+```bash
+python examples/cancelled_run.py
+```
+
 ## Architecture
 
 ```
@@ -326,7 +355,7 @@ ledgerloop/
 | Agent loop + Anthropic provider | Implemented |
 | Policy engine | Implemented — ordered rules, risk classification, hard ceiling |
 | Approval gateway | Implemented — role checks, separation of duties, fingerprint binding |
-| Run coordinator — propose → gate → halt → resume | Implemented |
+| Run coordinator — propose → gate → halt → resume → cancel | Implemented |
 | Action executor — exactly-once dispatch | Implemented |
 | Reconciler for in-flight claims | Implemented |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
