@@ -348,6 +348,18 @@ class TestApprovalRequest:
         with pytest.raises(StateTransitionError):
             expired.grant(at=AT, by="late@example.com")
 
+    def test_withdrawal_is_a_terminal_decision(self, tenant: TenantId):
+        withdrawn = self._request(tenant, _refund()).withdraw(at=AT)
+        assert withdrawn.state is ApprovalState.WITHDRAWN
+        assert withdrawn.state.is_terminal
+        with pytest.raises(StateTransitionError):
+            withdrawn.grant(at=AT, by="late@example.com")
+
+    def test_cannot_withdraw_a_decided_request(self, tenant: TenantId):
+        granted = self._request(tenant, _refund()).grant(at=AT, by="ops@example.com")
+        with pytest.raises(StateTransitionError):
+            granted.withdraw(at=AT)
+
     def test_grant_authorizes_only_the_exact_action(self, tenant: TenantId):
         action = _refund("1000")
         granted = self._request(tenant, action).grant(at=AT, by="ops@example.com")
