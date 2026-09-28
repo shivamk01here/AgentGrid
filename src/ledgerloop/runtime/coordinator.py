@@ -261,6 +261,61 @@ class RunCoordinator:
             decision=decision, run=executed, outcome=outcome, approval_id=request.id
         )
 
+    async def cancel(self, run: Run, *, reason: str | None = None) -> Run:
+        """Cancel a run at an operator's or caller's request.
+
+        Retires whatever approval the run was waiting on: a cancelled run is
+        never coming back to resume on it, and a request left PENDING behind
+        it would sit in a reviewer's queue for a case that is already over.
+
+        Args:
+            run: The run to cancel. Legal from PENDING, RUNNING,
+                AWAITING_APPROVAL, or SUSPENDED - wherever `Run.cancel()`
+                itself permits.
+            reason: Recorded on the ledger. Defaults to a generic note.
+
+        Returns:
+            The cancelled run.
+
+        Raises:
+            StateTransitionError: The run is already terminal, or otherwise
+                cannot legally reach CANCELLED.
+            ConcurrencyError: Another worker advanced the run first.
+        """
+        waiting_on = run.pending_approval_id
+        now = self._clock.now()
+        cancelled = await self._save(run.cancel(at=now))
+        await self._write(
+            cancelled,
+            LedgerEventType.RUN_CANCELLED,
+            {
+                "reason": reason or "Cancelled by operator",
+                "approval_id": None if waiting_on is None else str(waiting_on),
+            },
+        )
+        if waiting_on is not None:
+            await self._withdraw_approval(cancelled, waiting_on, at=now)
+        return cancelled
+
+    async def _withdraw_approval(
+        self, run: Run, approval_id: ApprovalId, *, at: datetime
+    ) -> None:
+        """Retire the request behind a cancelled run, never failing the cancel."""
+        try:
+            withdrawn = await self._approvals.withdraw(run.tenant_id, approval_id, at=at)
+        except LedgerloopError:
+            logger.exception("Could not withdraw approval %s on run %s", approval_id, run.id)
+            return
+
+        if withdrawn is None:
+            return
+
+        await self._write(
+            run,
+            LedgerEventType.APPROVAL_WITHDRAWN,
+            {"approval_id": str(approval_id), "state": withdrawn.state.value},
+        )
+
     async def _halt_for_approval(
         self, run: Run, action: Action, decision: PolicyDecision, *, at: datetime
     ) -> ActionResult:
