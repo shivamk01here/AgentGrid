@@ -35,11 +35,7 @@ def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]
                 continue
             key, _, value = line.partition("=")
             key = key.strip()
-            value = value.strip()
-            if " #" in value:
-                value = value.split(" #", 1)[0]
-            value = value.strip('"').strip("'")
-            config[key] = value
+            config[key] = _parse_value(value)
 
     if apply:
         # The file is not allowed to win over a variable somebody exported
@@ -51,3 +47,21 @@ def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]
                 os.environ[key] = value
 
     return config
+
+
+def _parse_value(raw: str) -> str:
+    """Read the value half of a KEY=VALUE line.
+
+    A quoted value is taken exactly as written between its quotes, so a
+    password or URL with " #" in it survives; whatever trails the closing
+    quote is a comment and is dropped. An unquoted value ends at the first
+    " #", and a stray quote with no partner is trimmed off as it always was.
+    """
+    raw = raw.strip()
+    if raw[:1] in {'"', "'"}:
+        closing = raw.find(raw[0], 1)
+        if closing != -1:
+            return raw[1:closing]
+    if " #" in raw:
+        raw = raw.split(" #", 1)[0]
+    return raw.strip().strip('"').strip("'")
