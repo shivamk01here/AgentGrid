@@ -318,6 +318,36 @@ does not get to rewrite it.
 python examples/cancelled_run.py
 ```
 
+## A run you want to stop, not end
+
+Cancelling is final. Sometimes what you want is a brake: the provider is
+having an incident, or someone wants to look at what the agent is about to do
+before it does the next thing. The coordinator can put a running run on hold
+and lift the hold later.
+
+```python
+held = await coordinator.suspend(run, reason="Provider incident")
+await coordinator.propose(held, refund)
+# -> StateTransitionError: nothing was evaluated, nothing was dispatched
+
+running = await coordinator.lift_hold(held, reason="Provider is back")
+await coordinator.propose(running, refund)
+# -> executed, exactly as if the pause had never happened
+```
+
+A hold raises no approval and waits on no one, so there is nothing to retire
+and nothing for a reviewer to find. What it does share with a halted run is
+the deadline: a run left suspended past its deadline is expired by the
+reaper like any other, so a hold somebody forgot about cannot outlive the
+case it was placed on.
+
+`lift_hold` only takes a suspended run. `resume` is still the way back from
+an approval, and it will not take a run that is merely held.
+
+```bash
+python examples/held_run.py
+```
+
 ## Architecture
 
 ```
@@ -355,7 +385,7 @@ ledgerloop/
 | Agent loop + Anthropic provider | Implemented |
 | Policy engine | Implemented — ordered rules, risk classification, hard ceiling |
 | Approval gateway | Implemented — role checks, separation of duties, fingerprint binding |
-| Run coordinator — propose → gate → halt → resume → cancel | Implemented |
+| Run coordinator — propose → gate → halt → resume → cancel, plus operator hold | Implemented |
 | Action executor — exactly-once dispatch | Implemented |
 | Reconciler for in-flight claims | Implemented |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
