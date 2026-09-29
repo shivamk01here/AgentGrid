@@ -11,6 +11,12 @@ The halt is the interesting case. A halted run is durable: it can sit for
 days waiting on a human and then resume on the same action it stopped at,
 without re-running anything it already did.
 
+A run can also be held by hand. `suspend` parks a RUNNING run without asking
+anyone for anything, `lift_hold` puts it back, and while it is held nothing
+it proposes is evaluated, let alone dispatched. That is the operator's brake:
+the thing to reach for when a run should stop *before* the next action rather
+than be ended.
+
 Whatever policy says, the run's own budget has the last word on money. An
 action that would carry a run past `RunBudget.max_value_moved` stops the run
 before anything is dispatched or anybody is asked, because the ceiling is
@@ -296,6 +302,68 @@ class RunCoordinator:
         if waiting_on is not None:
             await self._withdraw_approval(cancelled, waiting_on, at=now)
         return cancelled
+
+    async def suspend(self, run: Run, *, reason: str | None = None) -> Run:
+        """Put a RUNNING run on hold at an operator's request.
+
+        Unlike a halt for approval this raises nothing and waits on no one: it
+        is a brake, not a question. Nothing the run has already done is
+        touched, and the run keeps whatever deadline it was created with - a
+        held run that nobody lifts is expired by the reaper like any other
+        halted one.
+
+        Args:
+            run: The run to hold. Must be RUNNING; one already halted on an
+                approval is held by that approval.
+            reason: Recorded on the ledger. Defaults to a generic note.
+
+        Returns:
+            The suspended run.
+
+        Raises:
+            StateTransitionError: The run is not RUNNING.
+            ConcurrencyError: Another worker advanced the run first.
+        """
+        suspended = await self._save(run.suspend(at=self._clock.now()))
+        await self._write(
+            suspended,
+            LedgerEventType.RUN_SUSPENDED,
+            {"reason": reason or "Held by operator"},
+        )
+        logger.info("Run %s suspended: %s", run.id, reason or "Held by operator")
+        return suspended
+
+    async def lift_hold(self, run: Run, *, reason: str | None = None) -> Run:
+        """Return a suspended run to RUNNING.
+
+        This is the way back from `suspend` and only from `suspend`.
+        `resume` is the way back from an approval, and it will not take a
+        run that is merely held.
+
+        Args:
+            run: The suspended run.
+            reason: Recorded on the ledger. Defaults to a generic note.
+
+        Returns:
+            The run, RUNNING again and free to propose.
+
+        Raises:
+            StateTransitionError: The run is not SUSPENDED. A PENDING run is
+                deliberately refused too, though it could legally move to
+                RUNNING: lifting a hold that was never placed would start it.
+            ConcurrencyError: Another worker advanced the run first.
+        """
+        if run.state is not RunState.SUSPENDED:
+            raise StateTransitionError("Run", run.state.value, "released")
+
+        running = await self._save(run.resume(at=self._clock.now()))
+        await self._write(
+            running,
+            LedgerEventType.RUN_RESUMED,
+            {"reason": reason or "Hold lifted by operator", "resumed_from": run.state.value},
+        )
+        logger.info("Run %s hold lifted", run.id)
+        return running
 
     async def _withdraw_approval(
         self, run: Run, approval_id: ApprovalId, *, at: datetime
