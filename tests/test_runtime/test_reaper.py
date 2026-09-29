@@ -254,6 +254,45 @@ class TestRunsItLeavesAlone:
         assert (await runs.get(tenant, halted.run.id)).state is RunState.RUNNING
 
 
+class TestExpiringAHeldRun:
+    async def test_a_suspended_run_past_its_deadline_is_expired(
+        self, reaper, coordinator, runs, tenant, clock
+    ):
+        run = await runs.create(
+            RunSpec(tenant_id=tenant, objective="Wait out the incident", deadline=DEADLINE)
+        )
+        run = await runs.save(run.start(at=AT), expected_version=0)
+        held = await coordinator.suspend(run, reason="Provider incident")
+        await clock.advance(timedelta(days=7))
+
+        report = await reaper.sweep()
+
+        assert report.expired == 1
+        # There was never an approval behind a hold, so nothing to retire.
+        assert report.approvals_retired == 0
+        stored = await runs.get(tenant, held.id)
+        assert stored.state is RunState.EXPIRED
+        assert stored.stop_reason is StopReason.DEADLINE_EXCEEDED
+
+    async def test_a_hold_lifted_in_time_is_not_swept(
+        self, reaper, coordinator, runs, tenant, clock
+    ):
+        run = await runs.create(
+            RunSpec(tenant_id=tenant, objective="Brief pause", deadline=DEADLINE)
+        )
+        run = await runs.save(run.start(at=AT), expected_version=0)
+        held = await coordinator.suspend(run)
+        lifted = await coordinator.lift_hold(held)
+        await clock.advance(timedelta(days=7))
+
+        report = await reaper.sweep()
+
+        # RUNNING is not halted, so it is not the sweep's to end - the
+        # deadline only ever applied to a run nobody was driving.
+        assert report.expired == 0
+        assert (await runs.get(tenant, lifted.id)).state is RunState.RUNNING
+
+
 class TestTheSweep:
     async def test_an_empty_sweep_is_fine(self, reaper):
         report = await reaper.sweep()

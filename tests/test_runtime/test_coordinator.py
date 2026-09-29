@@ -466,3 +466,142 @@ class TestCancel:
 
         with pytest.raises(StateTransitionError):
             await coordinator.resume(cancelled, action)
+
+
+class TestHold:
+    async def test_suspending_a_running_run(self, coordinator, runs, tenant):
+        run = await _running_run(runs, tenant)
+
+        held = await coordinator.suspend(run)
+
+        assert held.state is RunState.SUSPENDED
+        assert (await runs.get(tenant, run.id)).state is RunState.SUSPENDED
+
+    async def test_the_hold_is_ledgered_with_its_reason(
+        self, coordinator, runs, ledger, tenant
+    ):
+        run = await _running_run(runs, tenant)
+
+        await coordinator.suspend(run, reason="Provider incident, waiting on their status page")
+
+        entry = next(
+            e
+            for e in await ledger.read(tenant, run.id)
+            if e.event_type.value == "run.suspended"
+        )
+        assert entry.payload["reason"] == "Provider incident, waiting on their status page"
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_a_hold_with_no_reason_still_says_something(
+        self, coordinator, runs, ledger, tenant
+    ):
+        run = await _running_run(runs, tenant)
+
+        await coordinator.suspend(run)
+
+        entry = next(
+            e
+            for e in await ledger.read(tenant, run.id)
+            if e.event_type.value == "run.suspended"
+        )
+        assert entry.payload["reason"]
+
+    async def test_a_held_run_cannot_act(
+        self, coordinator, runs, dispatcher, ledger, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        held = await coordinator.suspend(run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.propose(held, _refund("1000"))
+
+        assert dispatcher.dispatch_count == 0
+        # Refused before it is even written down as a proposal.
+        events = [e.event_type.value for e in await ledger.read(tenant, run.id)]
+        assert "action.proposed" not in events
+
+    async def test_lifting_the_hold_returns_the_run_to_running(
+        self, coordinator, runs, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        held = await coordinator.suspend(run)
+
+        lifted = await coordinator.lift_hold(held)
+
+        assert lifted.state is RunState.RUNNING
+        assert (await runs.get(tenant, run.id)).state is RunState.RUNNING
+
+    async def test_lifting_the_hold_is_ledgered(self, coordinator, runs, ledger, tenant):
+        run = await _running_run(runs, tenant)
+        held = await coordinator.suspend(run)
+
+        await coordinator.lift_hold(held, reason="Provider is back")
+
+        entry = next(
+            e
+            for e in await ledger.read(tenant, run.id)
+            if e.event_type.value == "run.resumed"
+        )
+        assert entry.payload["reason"] == "Provider is back"
+        assert entry.payload["resumed_from"] == "suspended"
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_a_run_whose_hold_was_lifted_can_act_again(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        held = await coordinator.suspend(run)
+        lifted = await coordinator.lift_hold(held)
+
+        result = await coordinator.propose(lifted, _refund("1000"))
+
+        assert result.executed
+        assert dispatcher.dispatch_count == 1
+
+    async def test_a_run_that_is_not_held_has_no_hold_to_lift(
+        self, coordinator, runs, tenant
+    ):
+        run = await _running_run(runs, tenant)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.lift_hold(run)
+
+    async def test_lifting_a_hold_never_starts_a_pending_run(
+        self, coordinator, runs, tenant
+    ):
+        # PENDING -> RUNNING is a legal transition, which is exactly why this
+        # has to be refused explicitly rather than left to the state machine.
+        pending = await runs.create(RunSpec(tenant_id=tenant, objective="Not started"))
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.lift_hold(pending)
+
+        assert (await runs.get(tenant, pending.id)).state is RunState.PENDING
+
+    async def test_a_run_waiting_on_approval_cannot_be_suspended(
+        self, coordinator, runs, gateway, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        halted = await coordinator.propose(run, _refund("50000"))
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.suspend(halted.run)
+
+        request = await gateway.get(tenant, halted.approval_id)
+        assert request.state is ApprovalState.PENDING
+        assert (await runs.get(tenant, run.id)).state is RunState.AWAITING_APPROVAL
+
+    async def test_a_held_run_is_not_an_approval_resume(self, coordinator, runs, tenant):
+        run = await _running_run(runs, tenant)
+        held = await coordinator.suspend(run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.resume(held, _refund("1000"))
+
+    async def test_a_held_run_can_still_be_cancelled(self, coordinator, runs, tenant):
+        run = await _running_run(runs, tenant)
+        held = await coordinator.suspend(run)
+
+        cancelled = await coordinator.cancel(held)
+
+        assert cancelled.state is RunState.CANCELLED
