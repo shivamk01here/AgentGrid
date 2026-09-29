@@ -60,19 +60,22 @@ class Step:
         for _ in range(attempts):
             start = time.monotonic()
             try:
-                if self.timeout_seconds is not None:
-                    output = await asyncio.wait_for(
-                        self.handler(self, context), timeout=self.timeout_seconds
-                    )
-                else:
+                # The scope knows whether *it* fired. A TimeoutError the
+                # handler raised itself - a socket, a downstream client - is
+                # a failure of the step's own work, and reading it as the
+                # step's deadline would report a limit that was never hit.
+                async with asyncio.timeout(self.timeout_seconds) as scope:
                     output = await self.handler(self, context)
                 duration = (time.monotonic() - start) * 1000
                 total_duration += duration
                 return StepResult.ok(self.name, output, total_duration)
-            except asyncio.TimeoutError:
+            except TimeoutError as exc:
                 duration = (time.monotonic() - start) * 1000
                 total_duration += duration
-                last_error = f"Step timed out after {self.timeout_seconds}s"
+                if scope.expired():
+                    last_error = f"Step timed out after {self.timeout_seconds}s"
+                else:
+                    last_error = str(exc) or "TimeoutError"
             except Exception as exc:
                 duration = (time.monotonic() - start) * 1000
                 total_duration += duration

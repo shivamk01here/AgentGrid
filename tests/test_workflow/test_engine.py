@@ -69,6 +69,26 @@ class TestStep:
         assert result.success is False
         assert "timed out" in result.error.lower()
 
+    @pytest.mark.asyncio
+    async def test_handler_timeout_is_not_reported_as_the_step_deadline(self):
+        async def dials_out(step: Step, ctx: dict) -> str:
+            raise TimeoutError("upstream took too long")
+
+        step = Step(name="s1", handler=dials_out)
+        result = await step.execute({})
+        assert result.success is False
+        assert result.error == "upstream took too long"
+        assert "None" not in result.error
+
+    @pytest.mark.asyncio
+    async def test_handler_timeout_under_a_deadline_keeps_its_own_message(self):
+        async def dials_out(step: Step, ctx: dict) -> str:
+            raise TimeoutError("upstream took too long")
+
+        step = Step(name="s1", handler=dials_out, timeout_seconds=30)
+        result = await step.execute({})
+        assert result.error == "upstream took too long"
+
 
 class TestStepResult:
     def test_ok_factory(self):
