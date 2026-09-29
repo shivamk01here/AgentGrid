@@ -91,13 +91,13 @@ class MemoryEngine:
             key=key,
             value=value,
             namespace=self.namespace,
-            tags=tags or [],
+            tags=list(tags or []),
             created_at=time.time(),
             expires_at=(time.time() + ttl_seconds) if ttl_seconds is not None else None,
         )
         await self._backend.store(self._key(key), value, entry)
         logger.debug("Stored key=%s namespace=%s", key, self.namespace)
-        return entry
+        return _copy(entry)
 
     async def retrieve(self, key: str) -> Any | None:
         """Retrieve a value by key. Returns None if missing or expired."""

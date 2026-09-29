@@ -110,6 +110,32 @@ class TestCacheEngine:
         assert fresh == []
 
     @pytest.mark.asyncio
+    async def test_set_does_not_keep_the_callers_tag_list(self):
+        engine = CacheEngine(namespace="test")
+        tags = ["original"]
+        await engine.set("k1", "v1", tags=tags)
+        tags.append("mutated")
+
+        assert await engine.search(tag="mutated") == []
+
+    @pytest.mark.asyncio
+    async def test_set_does_not_hand_back_the_stored_entry(self):
+        engine = CacheEngine(namespace="test")
+        entry = await engine.set("k1", "v1", tags=["original"])
+        entry.tags.append("mutated")
+
+        assert await engine.search(tag="mutated") == []
+
+    @pytest.mark.asyncio
+    async def test_the_entry_set_returns_still_describes_what_was_stored(self):
+        engine = CacheEngine(namespace="test")
+        entry = await engine.set("k1", "v1", ttl=60, tags=["a", "b"])
+
+        assert entry.value == "v1"
+        assert entry.ttl == 60
+        assert entry.tags == ["a", "b"]
+
+    @pytest.mark.asyncio
     async def test_search_isolation_across_namespaces(self):
         backend = InMemoryCache()
         engine_a = CacheEngine(namespace="a", backend=backend)

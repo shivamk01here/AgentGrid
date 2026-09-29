@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import replace
 from typing import Any
 
 from ledgerloop.cache.backend import CacheBackend
@@ -98,12 +99,16 @@ class CacheEngine:
             key=prefixed,
             value=value,
             ttl=ttl,
-            tags=tags or [],
+            # Copied on the way in as search() copies on the way out: the
+            # list the caller passed is theirs, and reusing it for the next
+            # call's tags would otherwise edit this entry too.
+            tags=list(tags or []),
             created_at=time.time(),
         )
         await self._backend.set(prefixed, entry)
         logger.debug("Cached key=%s namespace=%s", key, self.namespace)
-        return entry
+        # And a detached entry back, not the one the backend now holds.
+        return replace(entry, tags=list(entry.tags))
 
     async def delete(self, key: str) -> bool:
         """Delete a key. Returns True if it existed."""

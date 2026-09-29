@@ -112,6 +112,30 @@ class TestMemoryEngine:
         assert fresh == []
 
     @pytest.mark.asyncio
+    async def test_store_does_not_keep_the_callers_tag_list(self, memory_engine):
+        tags = ["original"]
+        await memory_engine.store("k1", "v1", tags=tags)
+        tags.append("mutated")
+
+        assert await memory_engine.search(tag="mutated") == []
+
+    @pytest.mark.asyncio
+    async def test_store_does_not_hand_back_the_stored_entry(self, memory_engine):
+        entry = await memory_engine.store("k1", "v1", tags=["original"])
+        entry.tags.append("mutated")
+
+        assert await memory_engine.search(tag="mutated") == []
+
+    @pytest.mark.asyncio
+    async def test_the_entry_store_returns_still_describes_what_was_stored(self, memory_engine):
+        entry = await memory_engine.store("k1", "v1", ttl_seconds=60, tags=["a", "b"])
+
+        assert entry.key == "k1"
+        assert entry.value == "v1"
+        assert entry.tags == ["a", "b"]
+        assert entry.expires_at is not None
+
+    @pytest.mark.asyncio
     async def test_list_all_excludes_expired(self):
         engine = MemoryEngine(namespace="test")
         await engine.store("alive", "yes")
