@@ -25,6 +25,12 @@ than COMPENSATED:
 
 A partial rollback is a worse state than either extreme, so it is reported
 loudly instead of being rounded up to success.
+
+And it does not act on a ledger it has not checked. The effects come from
+the run's hash chain, and a chain that has been edited - an amount changed, a
+settlement deleted - would have this send the wrong refund to the wrong
+place with every claim and receipt looking perfectly in order. The chain is
+verified before the run so much as enters COMPENSATING.
 """
 
 from __future__ import annotations
@@ -134,9 +140,15 @@ class Compensator:
 
         Raises:
             StateTransitionError: The run cannot enter COMPENSATING.
+            LedgerIntegrityError: The run's ledger does not verify. Nothing
+                was reversed, no claim was taken, and the run is still
+                RUNNING - a rollback worked out from tampered evidence is not
+                one to start.
         """
         if run.state is not RunState.RUNNING:
             raise StateTransitionError("Run", run.state.value, RunState.COMPENSATING.value)
+
+        await self._ledger.verify_chain(run.tenant_id, run.id)
 
         rolling_back = await self._save(run.begin_compensation(at=self._clock.now()))
         entries = await self._ledger.read(run.tenant_id, run.id)

@@ -23,7 +23,7 @@ from ledgerloop.core.enums import (
     IdempotencyState,
     RunState,
 )
-from ledgerloop.core.errors import ProviderError, StateTransitionError
+from ledgerloop.core.errors import LedgerIntegrityError, ProviderError, StateTransitionError
 from ledgerloop.core.ids import ActionId, ApprovalId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, ActionReceipt, RunSpec
 from ledgerloop.core.money import Money
@@ -449,6 +449,58 @@ class TestGuards:
 
         with pytest.raises(StateTransitionError):
             await compensator.compensate(halted)
+
+
+class TestTamperedLedger:
+    async def _tampered(self, executor, runs, ledger, tenant, clock):
+        """A RUNNING run whose recorded capture was quietly made bigger."""
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        chain = ledger._chains[(tenant.value, run.id.value)]
+        dispatched = next(e for e in chain if e.payload.get("amount_minor") is not None)
+        dispatched.payload["amount_minor"] = 25_000_000
+        return await runs.get(tenant, run.id)
+
+    async def test_a_chain_that_does_not_verify_is_not_rolled_back(
+        self, compensator, executor, runs, ledger, dispatcher, tenant, clock
+    ):
+        run = await self._tampered(executor, runs, ledger, tenant, clock)
+
+        with pytest.raises(LedgerIntegrityError):
+            await compensator.compensate(run)
+
+        assert dispatcher.compensated == []
+
+    async def test_the_run_is_left_running_not_compensating(
+        self, compensator, executor, runs, ledger, tenant, clock
+    ):
+        run = await self._tampered(executor, runs, ledger, tenant, clock)
+
+        with pytest.raises(LedgerIntegrityError):
+            await compensator.compensate(run)
+
+        assert (await runs.get(tenant, run.id)).state is RunState.RUNNING
+
+    async def test_no_reversal_claim_is_taken(
+        self, compensator, executor, runs, ledger, idempotency, tenant, clock
+    ):
+        run = await self._tampered(executor, runs, ledger, tenant, clock)
+        claims_before = len(idempotency.snapshot())
+
+        with pytest.raises(LedgerIntegrityError):
+            await compensator.compensate(run)
+
+        assert len(idempotency.snapshot()) == claims_before
+
+    async def test_an_untouched_chain_still_rolls_back(
+        self, compensator, executor, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        assert report.complete
 
 
 class _RefusingDispatcher(RecordingDispatcher):
