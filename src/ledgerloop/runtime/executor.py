@@ -120,10 +120,14 @@ class ActionExecutor:
                 action.idempotency_key,
                 record.state.value,
             )
+            succeeded = record.state is IdempotencyState.SUCCEEDED
+            # The ledger says what the claim says. A replayed failure written
+            # as a settlement would tell anyone reading the chain - and
+            # replay_effects, which folds it - that the effect landed.
             await self._write(
                 run_id,
                 tenant_id,
-                LedgerEventType.ACTION_SETTLED,
+                LedgerEventType.ACTION_SETTLED if succeeded else LedgerEventType.ACTION_FAILED,
                 {
                     "action_id": str(action.id),
                     "replayed": True,
@@ -134,7 +138,7 @@ class ActionExecutor:
             return ExecutionOutcome(
                 receipt=None if receipt is None else _mark_replayed(receipt),
                 replayed=True,
-                error=None if record.state is IdempotencyState.SUCCEEDED else "previously failed",
+                error=None if succeeded else "previously failed",
             )
 
         # 3. Held, but not by us. Another worker took this claim, or an earlier

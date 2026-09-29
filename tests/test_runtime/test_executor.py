@@ -16,9 +16,9 @@ from ledgerloop.adapters.memory import (
 )
 from ledgerloop.core.enums import ActionKind, Currency, FailureClass, IdempotencyState
 from ledgerloop.core.ids import ActionId, IdempotencyKey, RunId, TenantId
-from ledgerloop.core.models import Action
+from ledgerloop.core.models import Action, ActionReceipt
 from ledgerloop.core.money import Money
-from ledgerloop.runtime import ActionExecutor
+from ledgerloop.runtime import ActionExecutor, replay_effects
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 
@@ -190,6 +190,60 @@ class TestFailures:
 
         events = [e.event_type.value for e in await ledger.read(tenant, run_id)]
         assert "action.failed" in events
+
+    async def test_replaying_a_failure_is_ledgered_as_a_failure(
+        self, executor, dispatcher, ledger, tenant, run_id
+    ):
+        dispatcher.fail_next(FailureClass.INVALID_REQUEST)
+        action = refund()
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        replays = [
+            e for e in await ledger.read(tenant, run_id) if e.payload.get("replayed") is True
+        ]
+        assert [e.event_type.value for e in replays] == ["action.failed"]
+        assert replays[0].payload["state"] == "failed"
+
+    async def test_replaying_a_success_is_still_ledgered_as_a_settlement(
+        self, executor, ledger, tenant, run_id
+    ):
+        action = refund()
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        replays = [
+            e for e in await ledger.read(tenant, run_id) if e.payload.get("replayed") is True
+        ]
+        assert [e.event_type.value for e in replays] == ["action.settled"]
+
+    async def test_a_replayed_failure_does_not_bring_a_dead_effect_back(
+        self, executor, dispatcher, idempotency, ledger, clock, tenant, run_id
+    ):
+        # The request went out and the answer never came back...
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        action = refund()
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+        # ...and the claim was later settled as failed by something that had
+        # no run to write the news to, so the chain still shows it in doubt.
+        await idempotency.settle(
+            action.idempotency_key,
+            tenant,
+            ActionReceipt(
+                action_id=action.id,
+                state=IdempotencyState.FAILED,
+                failure_reason="Provider has no record of this request",
+                settled_at=clock.now(),
+            ),
+            at=clock.now(),
+        )
+        assert len(replay_effects(await ledger.read(tenant, run_id))) == 1
+
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        # It failed. Read as a settlement it would be an applied, reversible
+        # effect - and the next rollback would refund money that never left.
+        assert replay_effects(await ledger.read(tenant, run_id)) == ()
 
 
 class TestIndeterminate:
