@@ -9,6 +9,32 @@ from ledgerloop.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
 
+_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
+    "string": str,
+    "integer": int,
+    "number": (int, float),
+    "boolean": bool,
+    "array": list,
+    "object": dict,
+}
+
+
+def _matches_type(value: Any, type_name: str) -> bool:
+    """True when `value` is a `type_name` in JSON Schema's terms.
+
+    A bool is an int to Python and not to JSON Schema, so it only satisfies
+    "boolean". A type name this validator does not know about is not its
+    business to reject.
+    """
+    if type_name == "null":
+        return value is None
+    expected = _TYPE_MAP.get(type_name)
+    if expected is None:
+        return True
+    if isinstance(value, bool) and expected is not bool:
+        return False
+    return isinstance(value, expected)
+
 
 class ToolRegistry:
     """Central registry for tool management.
@@ -79,30 +105,25 @@ class ToolRegistry:
                 return f"Missing required parameter '{field_name}' for tool '{tool.name}'"
 
         for param_name in kwargs:
-            if param_name in properties:
-                expected_type = properties[param_name].get("type")
-                if expected_type:
-                    value = kwargs[param_name]
-                    type_map = {
-                        "string": str,
-                        "integer": int,
-                        "number": (int, float),
-                        "boolean": bool,
-                        "array": list,
-                        "object": dict,
-                    }
-                    expected = type_map.get(expected_type)
-                    if expected:
-                        if isinstance(value, bool) and expected is not bool:
-                            return (
-                                f"Parameter '{param_name}' expected type '{expected_type}' "
-                                f"but got 'boolean'"
-                            )
-                        if not isinstance(value, expected):
-                            return (
-                                f"Parameter '{param_name}' expected type '{expected_type}' "
-                                f"but got '{type(value).__name__}'"
-                            )
+            if param_name not in properties:
+                continue
+            declared = properties[param_name].get("type")
+            # JSON Schema lets "type" be a list - ["string", "null"] is how an
+            # optional parameter is usually written - and a list is not
+            # hashable, so it cannot go through the lookup a lone name does.
+            names = [declared] if isinstance(declared, str) else declared
+            allowed = [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
+            if not allowed:
+                continue
+
+            value = kwargs[param_name]
+            if any(_matches_type(value, name) for name in allowed):
+                continue
+            actual = "boolean" if isinstance(value, bool) else type(value).__name__
+            return (
+                f"Parameter '{param_name}' expected type '{' or '.join(allowed)}' "
+                f"but got '{actual}'"
+            )
 
         return None
 

@@ -159,3 +159,61 @@ class SchemaTool(BaseTool):
 
     async def execute(self, **kwargs) -> ToolResult:
         return ToolResult.ok(kwargs)
+
+
+class NullableTool(BaseTool):
+    @property
+    def name(self) -> str:
+        return "nullable_tool"
+
+    @property
+    def description(self) -> str:
+        return "Tool whose optional parameters are typed as a list"
+
+    @property
+    def parameters_schema(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "note": {"type": ["string", "null"]},
+                "limit": {"type": ["integer", "string"]},
+            },
+        }
+
+    async def execute(self, **kwargs) -> ToolResult:
+        return ToolResult.ok(kwargs)
+
+
+class TestUnionTypes:
+    @pytest.mark.asyncio
+    async def test_list_of_types_does_not_crash_validation(self, tool_registry):
+        tool_registry.register(NullableTool())
+        result = await tool_registry.invoke("nullable_tool", note="hello")
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_null_satisfies_a_nullable_type(self, tool_registry):
+        tool_registry.register(NullableTool())
+        result = await tool_registry.invoke("nullable_tool", note=None)
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_any_listed_type_is_accepted(self, tool_registry):
+        tool_registry.register(NullableTool())
+        assert (await tool_registry.invoke("nullable_tool", limit=5)).success is True
+        assert (await tool_registry.invoke("nullable_tool", limit="all")).success is True
+
+    @pytest.mark.asyncio
+    async def test_a_type_outside_the_list_is_rejected_and_names_them_all(self, tool_registry):
+        tool_registry.register(NullableTool())
+        result = await tool_registry.invoke("nullable_tool", note=12)
+        assert result.success is False
+        assert "expected type 'string or null'" in result.error
+        assert "got 'int'" in result.error
+
+    @pytest.mark.asyncio
+    async def test_bool_is_still_not_an_integer_inside_a_list(self, tool_registry):
+        tool_registry.register(NullableTool())
+        result = await tool_registry.invoke("nullable_tool", limit=True)
+        assert result.success is False
+        assert "got 'boolean'" in result.error
