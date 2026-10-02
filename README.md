@@ -348,6 +348,47 @@ an approval, and it will not take a run that is merely held.
 python examples/held_run.py
 ```
 
+## A run that is not done until it knows
+
+A run begins and ends through the coordinator too, and both ends are written
+down. `start` opens the chain with what the run was for and the limits it was
+given; `complete` closes it. A chain that simply stops after its last
+settlement looks the same whether the run finished or its worker died.
+
+```python
+run = await coordinator.start(run)
+# -> RUNNING, and run.started is the first entry in its ledger
+
+second = await coordinator.propose(first.run, build_refund("ord_4002", "900"))
+# -> the connection dropped. nobody knows whether this one landed.
+
+await coordinator.complete(second.run)
+# -> IndeterminateError: 1 effect(s) with no known outcome. still RUNNING.
+
+await reconciler.sweep()
+# -> checked=1 confirmed=1 failed=0 not_found=0 unresolved=0 skipped=0
+
+done = await coordinator.complete(second.run, summary="Two duplicate charges refunded")
+# -> SUCCEEDED, and run.completed says 2100.00 INR moved
+```
+
+`SUCCEEDED` means every effect committed, so a run with an effect still in
+doubt cannot get there. The agent that was just told "indeterminate" is the
+party most likely to shrug and call it finished, which is why the check is
+not left to it. A provider that definitely said no is different: that is an
+answer, and a run can finish having been refused something.
+
+The total in the closing entry is added up from the run's own ledger, in
+minor units per currency. A refund the reconciler confirmed an hour later
+counts, though the run never heard back about it directly.
+
+`start` only takes a `PENDING` run. A halted one comes back through `resume`
+or `lift_hold`, and starting it again is not a way round either.
+
+```bash
+python examples/finished_run.py
+```
+
 ## Architecture
 
 ```
@@ -385,9 +426,9 @@ ledgerloop/
 | Agent loop + Anthropic provider | Implemented |
 | Policy engine | Implemented — ordered rules, risk classification, hard ceiling |
 | Approval gateway | Implemented — role checks, separation of duties, fingerprint binding |
-| Run coordinator — propose → gate → halt → resume → cancel, plus operator hold | Implemented |
+| Run coordinator — start → propose → gate → halt → resume → complete, plus cancel and operator hold | Implemented |
 | Action executor — exactly-once dispatch | Implemented |
-| Reconciler for in-flight claims | Implemented |
+| Reconciler for in-flight claims | Implemented — reversals included, and a provider still processing is left open |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
 | Reaper — expiry of halted runs | Implemented — deadline-driven, retires the request behind it |
 | Run value ceiling | Implemented — checked before dispatch and approval, counts unanswered effects |
