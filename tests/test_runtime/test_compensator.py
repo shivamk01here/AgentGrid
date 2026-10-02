@@ -396,6 +396,39 @@ class TestThingsItRefusesToDo:
         assert effects[0].kind is ActionKind.CAPTURE
 
 
+    async def test_a_refusal_that_comes_back_as_a_receipt_is_not_success_either(
+        self, compensator, executor, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+
+        compensator = _with_dispatcher(compensator, _DecliningDispatcher())
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        assert report.compensated == 0
+        assert report.failed == 1
+        assert not report.complete
+        assert (await runs.get(tenant, run.id)).state is RunState.FAILED
+
+    async def test_a_declined_reversal_leaves_the_effect_standing(
+        self, compensator, executor, runs, ledger, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        effect = replay_effects(await ledger.read(tenant, run.id))[0]
+
+        compensator = _with_dispatcher(compensator, _DecliningDispatcher())
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        entries = await ledger.read(tenant, run.id)
+        assert entries[-1].event_type.value == "action.failed"
+        assert entries[-1].payload["detail"] == "Reversal window has closed"
+        assert len(replay_effects(entries)) == 1
+        # The claim agrees with the chain: settled, as a failure.
+        record = await idempotency.get(reversal_key(effect), tenant)
+        assert record.state is IdempotencyState.FAILED
+
+
 class TestPartialRollback:
     async def test_a_run_that_could_not_be_fully_rolled_back_fails(
         self, compensator, executor, runs, tenant, clock
@@ -515,6 +548,18 @@ class _RefusingDispatcher(RecordingDispatcher):
             "Reversal window has closed",
             provider="recording",
             failure_class=FailureClass.INVALID_REQUEST,
+        )
+
+
+class _DecliningDispatcher(RecordingDispatcher):
+    """A provider that says no in the response body instead of raising."""
+
+    async def compensate(self, action, receipt, *, at):
+        return ActionReceipt(
+            action_id=action.id,
+            state=IdempotencyState.FAILED,
+            failure_reason="Reversal window has closed",
+            settled_at=at,
         )
 
 

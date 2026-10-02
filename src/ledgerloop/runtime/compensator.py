@@ -238,6 +238,24 @@ class Compensator:
             return replace(report, failed=report.failed + 1)
 
         await self._settle(reversal_key(effect), run.tenant_id, receipt)
+        if receipt.state is IdempotencyState.FAILED:
+            # The provider answered, and the answer was no. It came back as a
+            # receipt rather than an exception, which changes nothing about
+            # whether the money came back.
+            logger.error(
+                "Provider declined to reverse effect %s on run %s",
+                effect.action_id,
+                run.id,
+            )
+            await self._write(
+                run,
+                effect,
+                reversed_ok=False,
+                detail=receipt.failure_reason or "provider reported the reversal failed",
+                provider_reference=receipt.provider_reference,
+            )
+            return replace(report, failed=report.failed + 1)
+
         await self._write(
             run,
             effect,
