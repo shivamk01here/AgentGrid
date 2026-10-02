@@ -528,7 +528,16 @@ class Run:
         return self.state.is_terminal
 
     def start(self, *, at: datetime) -> Run:
-        """Move PENDING -> RUNNING."""
+        """Move PENDING -> RUNNING.
+
+        Raises:
+            StateTransitionError: The run is not PENDING. A halted run can
+                legally reach RUNNING too, which is why this checks where it
+                is coming from rather than leaving it to the transition
+                table: that road is `resume`, and it clears the gate.
+        """
+        if self.state is not RunState.PENDING:
+            raise StateTransitionError("Run", self.state.value, RunState.RUNNING.value)
         return self._transition(RunState.RUNNING, at=at, started_at=at)
 
     def await_approval(self, approval_id: ApprovalId, *, at: datetime) -> Run:

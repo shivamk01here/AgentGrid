@@ -154,6 +154,25 @@ class TestRunTransitions:
         assert started.version == run.version + 1
         assert started.started_at == AT
 
+    def test_start_does_not_take_a_run_waiting_on_approval(self, run: Run):
+        halted = run.start(at=AT).await_approval(ApprovalId.generate(), at=AT)
+
+        # AWAITING_APPROVAL -> RUNNING is legal, but it is resume's move. Let
+        # start make it and the run is RUNNING with the gate still attached
+        # and nobody having decided anything.
+        with pytest.raises(StateTransitionError):
+            halted.start(at=AT)
+
+    def test_start_does_not_lift_a_hold(self, run: Run):
+        held = run.start(at=AT).suspend(at=AT)
+
+        with pytest.raises(StateTransitionError):
+            held.start(at=AT + timedelta(hours=1))
+
+    def test_start_does_not_restart_a_running_run(self, run: Run):
+        with pytest.raises(StateTransitionError):
+            run.start(at=AT).start(at=AT)
+
     def test_illegal_transition_raises(self, run: Run):
         with pytest.raises(StateTransitionError):
             run.succeed(at=AT)
