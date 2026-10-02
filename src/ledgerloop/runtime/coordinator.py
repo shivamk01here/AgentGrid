@@ -11,6 +11,12 @@ The halt is the interesting case. A halted run is durable: it can sit for
 days waiting on a human and then resume on the same action it stopped at,
 without re-running anything it already did.
 
+The two ends of a run go through here as well. `start` takes a PENDING run to
+RUNNING and `complete` takes a RUNNING one to SUCCEEDED, and each writes the
+ledger entry that says so - a chain that opens on its first action and stops
+after its last one does not say whether the run is finished or was abandoned.
+`complete` will not finish a run that still has an effect in doubt.
+
 A run can also be held by hand. `suspend` parks a RUNNING run without asking
 anyone for anything, `lift_hold` puts it back, and while it is held nothing
 it proposes is evaluated, let alone dispatched. That is the operator's brake:
@@ -41,6 +47,7 @@ from ledgerloop.core.enums import (
 from ledgerloop.core.errors import (
     BudgetExhaustedError,
     ConcurrencyError,
+    IndeterminateError,
     LedgerloopError,
     PolicyViolationError,
     StateTransitionError,
@@ -122,6 +129,45 @@ class RunCoordinator:
         self._ledger = ledger
         self._clock = clock
         self._approval_window = approval_window
+
+    async def start(self, run: Run) -> Run:
+        """Move a PENDING run to RUNNING and open its audit chain.
+
+        The entry this writes is the first one in the run's ledger, and it
+        records what the run was created to do and the limits it was given -
+        the two things a reader of the chain needs before any of the actions
+        underneath make sense.
+
+        Args:
+            run: The run to start, as the store created it.
+
+        Returns:
+            The run, RUNNING and free to propose.
+
+        Raises:
+            StateTransitionError: The run is not PENDING. A halted run is not
+                started again; it comes back through `resume` or `lift_hold`.
+            ConcurrencyError: Another worker advanced the run first.
+        """
+        running = await self._save(run.start(at=self._clock.now()))
+        ceiling = run.spec.budget.max_value_moved
+        await self._write(
+            running,
+            LedgerEventType.RUN_STARTED,
+            {
+                "objective": run.spec.objective,
+                "deadline": None
+                if run.spec.deadline is None
+                else run.spec.deadline.isoformat(),
+                "ceiling_minor": None if ceiling is None else ceiling.minor_units,
+                "currency": None if ceiling is None else ceiling.currency.value,
+                "correlation_id": None
+                if run.spec.correlation_id is None
+                else str(run.spec.correlation_id),
+            },
+        )
+        logger.info("Run %s started", run.id)
+        return running
 
     async def propose(self, run: Run, action: Action) -> ActionResult:
         """Put one action through policy and act on the verdict.
@@ -266,6 +312,58 @@ class RunCoordinator:
         return ActionResult(
             decision=decision, run=executed, outcome=outcome, approval_id=request.id
         )
+
+    async def complete(self, run: Run, *, summary: str | None = None) -> Run:
+        """Finish a RUNNING run as SUCCEEDED.
+
+        SUCCEEDED means every effect committed, so a run does not get there
+        while its own ledger still shows an effect nobody heard back about.
+        That one may have landed or may not, and calling the run a success
+        either way is a guess. Reconcile it, and complete the run afterwards.
+
+        Args:
+            run: The run to finish. Must be RUNNING.
+            summary: Recorded on the ledger - what the run achieved, in the
+                caller's words. Optional.
+
+        Returns:
+            The run, SUCCEEDED.
+
+        Raises:
+            StateTransitionError: The run is not RUNNING.
+            IndeterminateError: An effect this run dispatched has no known
+                outcome. The run is still RUNNING and nothing was written.
+            ConcurrencyError: Another worker advanced the run first.
+        """
+        if run.state is not RunState.RUNNING:
+            raise StateTransitionError("Run", run.state.value, RunState.SUCCEEDED.value)
+
+        standing = replay_effects(await self._ledger.read(run.tenant_id, run.id))
+        unanswered = [effect for effect in standing if effect.indeterminate]
+        if unanswered:
+            first = unanswered[0]
+            raise IndeterminateError(
+                f"Run {run.id} has {len(unanswered)} effect(s) with no known outcome - "
+                "reconcile before completing it",
+                idempotency_key=first.idempotency_key,
+                action_id=first.action_id,
+            )
+
+        succeeded = await self._save(run.succeed(at=self._clock.now()))
+        moved = succeeded.value_moved
+        await self._write(
+            succeeded,
+            LedgerEventType.RUN_COMPLETED,
+            {
+                "summary": summary,
+                "stop_reason": StopReason.COMPLETED.value,
+                "effects_standing": len(standing),
+                "value_moved_minor": None if moved is None else moved.minor_units,
+                "currency": None if moved is None else moved.currency.value,
+            },
+        )
+        logger.info("Run %s completed", run.id)
+        return succeeded
 
     async def cancel(self, run: Run, *, reason: str | None = None) -> Run:
         """Cancel a run at an operator's or caller's request.
