@@ -265,6 +265,76 @@ class TestSweep:
         assert result.checked == 0
 
 
+class SettlesFirstLookup:
+    """A provider whose own callback lands while the sweep is still asking.
+
+    By the time the lookup returns, something else has settled the claim as
+    failed - and the answer the sweep is handed says it succeeded.
+    """
+
+    def __init__(self, idempotency, action: Action) -> None:
+        self._idempotency = idempotency
+        self._action = action
+
+    async def lookup(self, key, tenant_id):
+        await self._idempotency.settle(
+            key,
+            tenant_id,
+            ActionReceipt(
+                action_id=self._action.id,
+                state=IdempotencyState.FAILED,
+                failure_reason="issuer declined",
+            ),
+            at=AT,
+        )
+        return ActionReceipt(action_id=self._action.id, state=IdempotencyState.SUCCEEDED)
+
+
+class TestLosingTheRace:
+    async def test_a_claim_somebody_else_settled_is_not_counted_as_confirmed(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        await clock.advance(timedelta(hours=1))
+
+        result = await _reconciler(
+            idempotency, ledger, clock, SettlesFirstLookup(idempotency, action)
+        ).sweep()
+
+        # The claim on record is FAILED. A report saying one was confirmed
+        # would be describing a settlement that never happened.
+        assert result.confirmed == 0
+        assert result.resolved == 0
+        assert result.skipped == 1
+        record = await idempotency.get(action.idempotency_key, tenant)
+        assert record.state is IdempotencyState.FAILED
+
+    async def test_the_answer_that_lost_is_not_ledgered(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        await clock.advance(timedelta(hours=1))
+
+        await _reconciler(
+            idempotency, ledger, clock, SettlesFirstLookup(idempotency, action)
+        ).sweep()
+
+        entries = await ledger.read(tenant, run_id)
+        assert not [e for e in entries if e.payload.get("reconciled")]
+
+    async def test_every_claim_checked_lands_in_exactly_one_count(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        await clock.advance(timedelta(hours=1))
+
+        result = await _reconciler(
+            idempotency, ledger, clock, SettlesFirstLookup(idempotency, action)
+        ).sweep()
+
+        assert result.checked == result.resolved + result.unresolved + result.skipped
+
+
 class TestLedgering:
     async def test_the_resolution_lands_in_the_runs_chain(
         self, idempotency, ledger, clock, tenant, run_id
@@ -308,3 +378,4 @@ class TestConfiguration:
         report = ReconciliationReport(checked=3, confirmed=1, not_found=1, unresolved=1)
         assert report.resolved == 2
         assert "checked=3" in str(report)
+        assert "skipped=0" in str(report)

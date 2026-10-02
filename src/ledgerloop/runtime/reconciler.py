@@ -62,6 +62,10 @@ class ReconciliationReport:
     unresolved: int = 0
     """Lookup itself failed, or the provider is still working on the request.
     Left in flight, will be retried next sweep."""
+    skipped: int = 0
+    """Claims somebody else settled between the query and the write - another
+    sweep, or a late callback. Resolved, but not by this sweep, and not
+    necessarily the way this sweep was about to resolve them."""
 
     @property
     def resolved(self) -> int:
@@ -71,7 +75,7 @@ class ReconciliationReport:
         return (
             f"checked={self.checked} confirmed={self.confirmed} "
             f"failed={self.failed} not_found={self.not_found} "
-            f"unresolved={self.unresolved}"
+            f"unresolved={self.unresolved} skipped={self.skipped}"
         )
 
 
@@ -115,7 +119,7 @@ class Reconciler:
             falls is an alert, not a statistic.
         """
         cutoff = self._clock.now() - self._grace
-        checked = confirmed = failed = not_found = unresolved = 0
+        checked = confirmed = failed = not_found = unresolved = skipped = 0
 
         async for record in self._idempotency.find_in_flight(older_than=cutoff, limit=limit):
             checked += 1
@@ -128,6 +132,8 @@ class Reconciler:
                 failed += 1
             elif outcome == "not_found":
                 not_found += 1
+            elif outcome == "skipped":
+                skipped += 1
 
         report = ReconciliationReport(
             checked=checked,
@@ -135,6 +141,7 @@ class Reconciler:
             failed=failed,
             not_found=not_found,
             unresolved=unresolved,
+            skipped=skipped,
         )
         if checked:
             logger.info("Reconciliation sweep complete: %s", report)
@@ -144,8 +151,10 @@ class Reconciler:
         """Resolve one record.
 
         Returns:
-            A string indicating the resolution: "confirmed", "failed", 
-            "not_found", or "unresolved".
+            A string indicating the resolution: "confirmed", "failed",
+            "not_found", or "unresolved" - or "skipped" when the claim turned
+            out to be settled already, and what is on record is somebody
+            else's answer rather than this sweep's.
         """
         try:
             receipt = await self._lookup.lookup(record.key, record.tenant_id)
@@ -163,7 +172,8 @@ class Reconciler:
                 failure_reason="Provider has no record of this request",
                 settled_at=self._clock.now(),
             )
-            await self._settle(record, settled, LedgerEventType.ACTION_FAILED)
+            if not await self._settle(record, settled, LedgerEventType.ACTION_FAILED):
+                return "skipped"
             return "not_found"
 
         if receipt.state is IdempotencyState.IN_FLIGHT:
@@ -174,13 +184,15 @@ class Reconciler:
             return "unresolved"
 
         if receipt.succeeded:
-            await self._settle(record, receipt, LedgerEventType.ACTION_SETTLED)
+            if not await self._settle(record, receipt, LedgerEventType.ACTION_SETTLED):
+                return "skipped"
             return "confirmed"
 
         # The provider found the request and told us it failed. That is still
         # a resolution - the claim settles - but it is not a confirmation,
         # and it must not be ledgered as one.
-        await self._settle(record, receipt, LedgerEventType.ACTION_FAILED)
+        if not await self._settle(record, receipt, LedgerEventType.ACTION_FAILED):
+            return "skipped"
         return "failed"
 
     async def _settle(
@@ -188,23 +200,30 @@ class Reconciler:
         record: IdempotencyRecord,
         receipt: ActionReceipt,
         event: LedgerEventType,
-    ) -> None:
-        """Settle the claim and write the resolution to the ledger."""
+    ) -> bool:
+        """Settle the claim and write the resolution to the ledger.
+
+        Returns:
+            True when this call settled the claim. False when it was settled
+            already: the outcome on record is whatever the other party wrote,
+            and nothing is ledgered here on top of it.
+        """
         try:
             await self._idempotency.settle(
                 record.key, record.tenant_id, receipt, at=self._clock.now()
             )
         except LedgerloopError:
             # Another sweep, or a late callback, settled it first. That is a
-            # benign race - the claim is resolved either way.
+            # benign race - the claim is resolved either way - but it was not
+            # resolved here, and the caller must not count it as though it was.
             logger.info("Claim %s was already settled by someone else", record.key)
-            return
+            return False
 
         if record.run_id is None:
             # Nothing to attach the entry to. The claim is still correctly
             # settled - we just cannot file the paperwork.
             logger.warning("Claim %s has no run id; reconciliation not ledgered", record.key)
-            return
+            return True
 
         try:
             await self._ledger.append(
@@ -222,3 +241,4 @@ class Reconciler:
             )
         except Exception:
             logger.exception("Failed to ledger reconciliation of %s", record.key)
+        return True
