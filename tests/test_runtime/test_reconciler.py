@@ -8,6 +8,7 @@ from ledgerloop.adapters.clock import ManualClock
 from ledgerloop.adapters.memory import (
     InMemoryIdempotencyStore,
     InMemoryLedgerStore,
+    InMemoryRunStore,
     RecordingDispatcher,
 )
 from ledgerloop.core.enums import (
@@ -17,10 +18,11 @@ from ledgerloop.core.enums import (
     IdempotencyState,
     LedgerEventType,
 )
+from ledgerloop.core.errors import IndeterminateError
 from ledgerloop.core.ids import ActionId, IdempotencyKey, RunId, TenantId
-from ledgerloop.core.models import Action, ActionReceipt
+from ledgerloop.core.models import Action, ActionReceipt, RunSpec
 from ledgerloop.core.money import Money
-from ledgerloop.runtime import ActionExecutor, Reconciler, replay_effects
+from ledgerloop.runtime import ActionExecutor, Compensator, Reconciler, replay_effects
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 
@@ -333,6 +335,113 @@ class TestLosingTheRace:
         ).sweep()
 
         assert result.checked == result.resolved + result.unresolved + result.skipped
+
+
+class DroppedReversalDispatcher(RecordingDispatcher):
+    """Dispatches normally, and loses the connection on every reversal."""
+
+    async def compensate(self, action, receipt, *, at):
+        raise IndeterminateError(
+            "Connection dropped after the reversal was sent", action_id=action.id
+        )
+
+
+async def _stranded_reversal(idempotency, ledger, clock, tenant):
+    """Capture, then roll back with a reversal nobody heard back from."""
+    runs = InMemoryRunStore(clock=clock)
+    dispatcher = DroppedReversalDispatcher()
+    run = await runs.create(RunSpec(tenant_id=tenant, objective="Settle the batch"))
+    run = await runs.save(run.start(at=clock.now()), expected_version=0)
+
+    money = Money.from_major("2500", Currency.INR)
+    action = Action(
+        id=ActionId.generate(),
+        kind=ActionKind.CAPTURE,
+        description="Capture on order ord_1",
+        amount=money,
+        counterparty="mer_1",
+        idempotency_key=IdempotencyKey.derive("capture", "ord_1", str(money.minor_units)),
+    )
+    executor = ActionExecutor(
+        idempotency=idempotency, dispatcher=dispatcher, ledger=ledger, clock=clock
+    )
+    await executor.execute(action, run_id=run.id, tenant_id=tenant)
+
+    await Compensator(
+        runs=runs, ledger=ledger, dispatcher=dispatcher, idempotency=idempotency, clock=clock
+    ).compensate(run)
+    return run, action
+
+
+class TestReversalClaims:
+    """A reversal's claim carries the id of the action it was undoing."""
+
+    async def test_a_reversal_that_never_landed_leaves_the_capture_standing(
+        self, idempotency, ledger, clock, tenant
+    ):
+        run, action = await _stranded_reversal(idempotency, ledger, clock, tenant)
+        await clock.advance(timedelta(hours=1))
+
+        result = await _reconciler(
+            idempotency, ledger, clock, StubLookup(receipt=None)
+        ).sweep()
+
+        # The refund did not happen. The capture did, and the chain must not
+        # come out of reconciliation saying otherwise.
+        assert result.not_found == 1
+        (effect,) = replay_effects(await ledger.read(tenant, run.id))
+        assert effect.action_id == action.id
+        assert not effect.indeterminate
+
+    async def test_the_failure_is_ledgered_against_the_reversal(
+        self, idempotency, ledger, clock, tenant
+    ):
+        run, _ = await _stranded_reversal(idempotency, ledger, clock, tenant)
+        await clock.advance(timedelta(hours=1))
+
+        await _reconciler(idempotency, ledger, clock, StubLookup(receipt=None)).sweep()
+
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.event_type is LedgerEventType.ACTION_FAILED
+        assert entry.payload["compensation"] is True
+        assert entry.payload["reconciled"] is True
+
+    async def test_a_reversal_that_did_land_takes_the_capture_down(
+        self, idempotency, ledger, clock, tenant
+    ):
+        run, action = await _stranded_reversal(idempotency, ledger, clock, tenant)
+        lookup = StubLookup(
+            receipt=ActionReceipt(
+                action_id=action.id,
+                state=IdempotencyState.SUCCEEDED,
+                provider_reference="psp_refund_1",
+            )
+        )
+        await clock.advance(timedelta(hours=1))
+
+        result = await _reconciler(idempotency, ledger, clock, lookup).sweep()
+
+        assert result.confirmed == 1
+        entries = await ledger.read(tenant, run.id)
+        assert entries[-1].event_type is LedgerEventType.ACTION_COMPENSATED
+        assert entries[-1].payload["provider_reference"] == "psp_refund_1"
+        assert replay_effects(entries) == ()
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_an_ordinary_claim_is_ledgered_as_before(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        lookup = StubLookup(
+            receipt=ActionReceipt(action_id=action.id, state=IdempotencyState.SUCCEEDED)
+        )
+        await clock.advance(timedelta(hours=1))
+
+        await _reconciler(idempotency, ledger, clock, lookup).sweep()
+
+        entry = (await ledger.read(tenant, run_id))[-1]
+        assert entry.event_type is LedgerEventType.ACTION_SETTLED
+        assert "compensation" not in entry.payload
 
 
 class TestLedgering:

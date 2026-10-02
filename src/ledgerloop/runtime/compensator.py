@@ -60,6 +60,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["CompensationReport", "Compensator"]
 
+_REVERSAL_PREFIX = "reverse:"
+"""What every reversal claim's fingerprint starts with. An action's own
+fingerprint is a hex digest, so it can never start with this."""
+
 
 @dataclass(frozen=True, slots=True)
 class CompensationReport:
@@ -343,6 +347,19 @@ def reversal_key(effect: AppliedEffect) -> IdempotencyKey:
     return IdempotencyKey.derive("reverse", original)
 
 
+def is_reversal_claim(record: IdempotencyRecord) -> bool:
+    """True when `record` is the claim a reversal was dispatched under.
+
+    A reversal's claim carries the action id of the effect it undoes, so the
+    id alone cannot tell the two apart - and whoever settles the claim later
+    has to, because "the refund failed" and "the capture failed" are opposite
+    statements about the same action. The fingerprint is what differs: an
+    action's is a bare digest, and a reversal's is written by
+    `_reversal_fingerprint` below.
+    """
+    return record.action_fingerprint.startswith(_REVERSAL_PREFIX)
+
+
 def _reversal_fingerprint(effect: AppliedEffect) -> str:
     """Fingerprint for a reversal claim.
 
@@ -350,6 +367,4 @@ def _reversal_fingerprint(effect: AppliedEffect) -> str:
     store rejects a key reused under different content, and a reversal is
     different content.
     """
-    return f"reverse:{effect.action_id}:{effect.kind.value}"
-
-
+    return f"{_REVERSAL_PREFIX}{effect.action_id}:{effect.kind.value}"

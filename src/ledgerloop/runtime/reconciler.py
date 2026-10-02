@@ -6,6 +6,11 @@ the provider, and then we lost the answer. Somebody has to go and ask.
 This is the part most systems skip, and it is why they double-pay. The
 executor deliberately refuses to guess; the reconciler is where the guess is
 replaced with a lookup.
+
+Reversals leave the same question behind when they time out, and they are
+swept the same way. The answer is written down differently, though: a
+reversal's claim names the action it was undoing, so its outcome goes into
+the chain as something that happened to the reversal, never to the original.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from ledgerloop.core.enums import IdempotencyState, LedgerEventType
 from ledgerloop.core.errors import LedgerloopError
 from ledgerloop.core.models import ActionReceipt
+from ledgerloop.runtime.compensator import is_reversal_claim
 
 if TYPE_CHECKING:
     from ledgerloop.core.ids import IdempotencyKey, TenantId
@@ -225,18 +231,28 @@ class Reconciler:
             logger.warning("Claim %s has no run id; reconciliation not ledgered", record.key)
             return True
 
+        payload: dict[str, object] = {
+            "idempotency_key": str(record.key),
+            "action_id": None if record.action_id is None else str(record.action_id),
+            "reconciled": True,
+            "state": receipt.state.value,
+            "provider_reference": receipt.provider_reference,
+        }
+        if is_reversal_claim(record):
+            # The claim is for undoing the action it names, not for the
+            # action. Ledgered as it stands, a reversal that never landed
+            # reads back as the original effect having failed, and one that
+            # did land reads back as the original still being applied.
+            payload["compensation"] = True
+            if event is LedgerEventType.ACTION_SETTLED:
+                event = LedgerEventType.ACTION_COMPENSATED
+
         try:
             await self._ledger.append(
                 record.run_id,
                 record.tenant_id,
                 event,
-                {
-                    "idempotency_key": str(record.key),
-                    "action_id": None if record.action_id is None else str(record.action_id),
-                    "reconciled": True,
-                    "state": receipt.state.value,
-                    "provider_reference": receipt.provider_reference,
-                },
+                payload,
                 occurred_at=self._clock.now(),
             )
         except Exception:
