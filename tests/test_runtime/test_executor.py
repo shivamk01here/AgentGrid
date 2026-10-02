@@ -246,6 +246,65 @@ class TestFailures:
         assert replay_effects(await ledger.read(tenant, run_id)) == ()
 
 
+class DecliningDispatcher(RecordingDispatcher):
+    """A provider that answers a refusal with a receipt, not an exception."""
+
+    async def dispatch(self, action, *, at):
+        self.dispatched.append(action)
+        return ActionReceipt(
+            action_id=action.id,
+            state=IdempotencyState.FAILED,
+            provider_reference="psp_declined_1",
+            failure_reason="issuer declined",
+            settled_at=at,
+        )
+
+
+class TestAFailureThatComesBackAsAReceipt:
+    @pytest.fixture
+    def dispatcher(self) -> DecliningDispatcher:
+        return DecliningDispatcher()
+
+    async def test_it_is_not_ledgered_as_a_settlement(
+        self, executor, ledger, tenant, run_id
+    ):
+        await executor.execute(refund(), run_id=run_id, tenant_id=tenant)
+
+        events = [e.event_type.value for e in await ledger.read(tenant, run_id)]
+        assert events == ["action.dispatched", "action.failed"]
+
+    async def test_the_chain_and_the_claim_agree(
+        self, executor, idempotency, ledger, tenant, run_id
+    ):
+        action = refund()
+        outcome = await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        record = await idempotency.get(action.idempotency_key, tenant)
+        assert record.state is IdempotencyState.FAILED
+        assert not outcome.succeeded
+        assert outcome.error == "issuer declined"
+        # Nothing landed, so there is nothing standing to roll back or to
+        # count against a ceiling.
+        assert replay_effects(await ledger.read(tenant, run_id)) == ()
+
+    async def test_the_providers_reference_is_kept(self, executor, ledger, tenant, run_id):
+        await executor.execute(refund(), run_id=run_id, tenant_id=tenant)
+
+        entry = (await ledger.read(tenant, run_id))[-1]
+        assert entry.payload["provider_reference"] == "psp_declined_1"
+        assert entry.payload["error"] == "issuer declined"
+
+    async def test_a_read_that_failed_is_not_ledgered_as_settled_either(
+        self, executor, ledger, tenant, run_id
+    ):
+        lookup = Action(id=ActionId.generate(), kind=ActionKind.READ, description="Look up order")
+        outcome = await executor.execute(lookup, run_id=run_id, tenant_id=tenant)
+
+        assert not outcome.succeeded
+        events = [e.event_type.value for e in await ledger.read(tenant, run_id)]
+        assert events == ["action.dispatched", "action.failed"]
+
+
 class TestIndeterminate:
     async def test_the_claim_is_left_in_flight(
         self, executor, dispatcher, idempotency, tenant, run_id

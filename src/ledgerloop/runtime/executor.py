@@ -214,6 +214,19 @@ class ActionExecutor:
         await self._idempotency.settle(
             action.idempotency_key, tenant_id, receipt, at=self._clock.now()
         )
+        if receipt.state is IdempotencyState.FAILED:
+            # A refusal can come back as a receipt as well as an exception.
+            # The claim has just been settled as failed, and the chain has to
+            # say the same thing the claim does.
+            error = receipt.failure_reason or "Provider reported the action failed"
+            await self._write(
+                run_id,
+                tenant_id,
+                LedgerEventType.ACTION_FAILED,
+                _describe_failure(action, receipt, error),
+            )
+            return ExecutionOutcome(receipt=receipt, error=error)
+
         await self._write(
             run_id,
             tenant_id,
@@ -246,6 +259,16 @@ class ActionExecutor:
                 {"action_id": str(action.id), "error": str(exc)},
             )
             return ExecutionOutcome(receipt=None, error=str(exc))
+
+        if receipt.state is IdempotencyState.FAILED:
+            error = receipt.failure_reason or "Provider reported the action failed"
+            await self._write(
+                run_id,
+                tenant_id,
+                LedgerEventType.ACTION_FAILED,
+                _describe_failure(action, receipt, error),
+            )
+            return ExecutionOutcome(receipt=receipt, error=error)
 
         await self._write(
             run_id,
@@ -309,6 +332,19 @@ def _describe(action: Action) -> dict[str, object]:
         if action.idempotency_key is None
         else str(action.idempotency_key),
         "fingerprint": action.fingerprint(),
+    }
+
+
+def _describe_failure(action: Action, receipt: ActionReceipt, error: str) -> dict[str, object]:
+    """Summarize a failure the provider reported in a receipt.
+
+    The provider's reference is kept: a declined request still has an id on
+    their side, and it is what support will ask for.
+    """
+    return {
+        "action_id": str(action.id),
+        "error": error,
+        "provider_reference": receipt.provider_reference,
     }
 
 
