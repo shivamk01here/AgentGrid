@@ -20,7 +20,7 @@ from ledgerloop.core.enums import (
 from ledgerloop.core.ids import ActionId, IdempotencyKey, RunId, TenantId
 from ledgerloop.core.models import Action, ActionReceipt
 from ledgerloop.core.money import Money
-from ledgerloop.runtime import ActionExecutor, Reconciler
+from ledgerloop.runtime import ActionExecutor, Reconciler, replay_effects
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 
@@ -171,6 +171,49 @@ class TestSweep:
         assert result.unresolved == 1
         record = await idempotency.get(action.idempotency_key, tenant)
         assert record.state is IdempotencyState.IN_FLIGHT
+
+    async def test_a_provider_still_working_on_it_is_not_a_failure(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        lookup = StubLookup(
+            receipt=ActionReceipt(
+                action_id=action.id,
+                state=IdempotencyState.IN_FLIGHT,
+                provider_reference="psp_real_3",
+            )
+        )
+        await clock.advance(timedelta(hours=1))
+
+        result = await _reconciler(idempotency, ledger, clock, lookup).sweep()
+
+        # "Still processing" is not an outcome. The claim stays open with no
+        # receipt on it, and nothing is ledgered as resolved.
+        assert result.unresolved == 1
+        assert result.failed == 0
+        assert result.resolved == 0
+        record = await idempotency.get(action.idempotency_key, tenant)
+        assert record.state is IdempotencyState.IN_FLIGHT
+        assert record.receipt is None
+        entries = await ledger.read(tenant, run_id)
+        assert not [e for e in entries if e.payload.get("reconciled")]
+
+    async def test_a_pending_refund_is_still_standing_in_the_chain(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        lookup = StubLookup(
+            receipt=ActionReceipt(action_id=action.id, state=IdempotencyState.IN_FLIGHT)
+        )
+        await clock.advance(timedelta(hours=1))
+
+        await _reconciler(idempotency, ledger, clock, lookup).sweep()
+
+        # A failure entry would have dropped it, and the run's value ceiling
+        # would have stopped counting money that may yet go out.
+        (effect,) = replay_effects(await ledger.read(tenant, run_id))
+        assert effect.action_id == action.id
+        assert effect.indeterminate
 
     async def test_claims_inside_the_grace_period_are_left_alone(
         self, idempotency, ledger, clock, tenant, run_id

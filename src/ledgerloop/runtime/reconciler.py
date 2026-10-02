@@ -60,7 +60,8 @@ class ReconciliationReport:
     not_found: int = 0
     """Provider never saw it. Claim settled as failed."""
     unresolved: int = 0
-    """Lookup itself failed. Left in flight, will be retried next sweep."""
+    """Lookup itself failed, or the provider is still working on the request.
+    Left in flight, will be retried next sweep."""
 
     @property
     def resolved(self) -> int:
@@ -164,6 +165,13 @@ class Reconciler:
             )
             await self._settle(record, settled, LedgerEventType.ACTION_FAILED)
             return "not_found"
+
+        if receipt.state is IdempotencyState.IN_FLIGHT:
+            # The provider has the request and has not finished with it. That
+            # is not an answer yet, and settling on it would write "failed"
+            # over something that may still land.
+            logger.info("Provider is still processing %s; leaving it in flight", record.key)
+            return "unresolved"
 
         if receipt.succeeded:
             await self._settle(record, receipt, LedgerEventType.ACTION_SETTLED)
