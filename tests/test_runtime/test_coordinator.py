@@ -18,13 +18,27 @@ from ledgerloop.adapters.memory import (
     InMemoryRunStore,
     RecordingDispatcher,
 )
-from ledgerloop.core.enums import ActionKind, ApprovalState, Currency, RiskTier, RunState
-from ledgerloop.core.errors import PolicyViolationError, StateTransitionError
+from ledgerloop.core.enums import (
+    ActionKind,
+    ApprovalState,
+    Currency,
+    FailureClass,
+    LedgerEventType,
+    RiskTier,
+    RunState,
+    StopReason,
+)
+from ledgerloop.core.errors import (
+    ConcurrencyError,
+    IndeterminateError,
+    PolicyViolationError,
+    StateTransitionError,
+)
 from ledgerloop.core.ids import ActionId, IdempotencyKey, TenantId
-from ledgerloop.core.models import Action, RunSpec
+from ledgerloop.core.models import Action, RunBudget, RunSpec
 from ledgerloop.core.money import Money
 from ledgerloop.policy import ThresholdPolicyEngine
-from ledgerloop.runtime import ActionExecutor, RunCoordinator
+from ledgerloop.runtime import ActionExecutor, Reconciler, RunCoordinator
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 APPROVER = "ops@example.com"
@@ -605,3 +619,268 @@ class TestHold:
         cancelled = await coordinator.cancel(held)
 
         assert cancelled.state is RunState.CANCELLED
+
+
+class TestStart:
+    async def test_starting_a_pending_run(self, coordinator, runs, tenant, clock):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+
+        running = await coordinator.start(run)
+
+        assert running.state is RunState.RUNNING
+        assert running.started_at == clock.now()
+        assert (await runs.get(tenant, run.id)).state is RunState.RUNNING
+
+    async def test_the_start_is_the_first_thing_in_the_chain(
+        self, coordinator, runs, ledger, tenant
+    ):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+
+        running = await coordinator.start(run)
+        await coordinator.propose(running, _refund("1000"))
+
+        entries = await ledger.read(tenant, run.id)
+        assert entries[0].event_type is LedgerEventType.RUN_STARTED
+        assert entries[0].payload["objective"] == "Handle exceptions"
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_the_start_records_the_limits_the_run_was_given(
+        self, coordinator, runs, ledger, tenant
+    ):
+        deadline = AT + timedelta(days=2)
+        run = await runs.create(
+            RunSpec(
+                tenant_id=tenant,
+                objective="Clear the queue",
+                deadline=deadline,
+                budget=RunBudget(max_value_moved=Money.from_major("10000", Currency.INR)),
+            )
+        )
+
+        await coordinator.start(run)
+
+        (entry,) = await ledger.read(tenant, run.id)
+        assert entry.payload["deadline"] == deadline.isoformat()
+        assert entry.payload["ceiling_minor"] == 1_000_000
+        assert entry.payload["currency"] == "INR"
+
+    async def test_a_started_run_can_act(self, coordinator, runs, dispatcher, tenant):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+
+        running = await coordinator.start(run)
+        result = await coordinator.propose(running, _refund("1000"))
+
+        assert result.executed
+        assert dispatcher.dispatch_count == 1
+
+    async def test_a_run_cannot_be_started_twice(self, coordinator, runs, ledger, tenant):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+        running = await coordinator.start(run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.start(running)
+
+        assert len(await ledger.read(tenant, run.id)) == 1
+
+    async def test_a_held_run_is_not_started_again(self, coordinator, runs, tenant):
+        run = await _running_run(runs, tenant)
+        held = await coordinator.suspend(run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.start(held)
+
+        assert (await runs.get(tenant, run.id)).state is RunState.SUSPENDED
+
+    async def test_starting_is_not_a_way_round_an_approval(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        halted = await coordinator.propose(run, _refund("84000"))
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.start(halted.run)
+
+        stored = await runs.get(tenant, run.id)
+        assert stored.state is RunState.AWAITING_APPROVAL
+        assert stored.pending_approval_id == halted.approval_id
+        assert dispatcher.dispatch_count == 0
+
+    async def test_two_workers_starting_the_same_run(self, coordinator, runs, tenant):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+        await coordinator.start(run)
+
+        # The second worker still holds the PENDING copy it read.
+        with pytest.raises(ConcurrencyError):
+            await coordinator.start(run)
+
+
+class _NeverSawIt:
+    """A provider with no record of whatever it is asked about."""
+
+    async def lookup(self, key, tenant_id):
+        return None
+
+
+class TestComplete:
+    async def test_completing_a_running_run(self, coordinator, runs, tenant, clock):
+        run = await _running_run(runs, tenant)
+
+        done = await coordinator.complete(run)
+
+        assert done.state is RunState.SUCCEEDED
+        assert done.stop_reason is StopReason.COMPLETED
+        assert done.ended_at == clock.now()
+        assert (await runs.get(tenant, run.id)).state is RunState.SUCCEEDED
+
+    async def test_the_completion_closes_the_chain(self, coordinator, runs, ledger, tenant):
+        run = await _running_run(runs, tenant)
+        result = await coordinator.propose(run, _refund("1000"))
+
+        await coordinator.complete(result.run, summary="One duplicate charge refunded")
+
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.event_type is LedgerEventType.RUN_COMPLETED
+        assert entry.payload["summary"] == "One duplicate charge refunded"
+        assert entry.payload["value_moved_minor"] == 100_000
+        assert entry.payload["currency"] == "INR"
+        assert entry.payload["effects_standing"] == 1
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_a_run_that_moved_nothing_says_so(self, coordinator, runs, ledger, tenant):
+        run = await _running_run(runs, tenant)
+
+        await coordinator.complete(run)
+
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.payload["value_moved_minor"] is None
+        assert entry.payload["effects_standing"] == 0
+
+    async def test_a_completed_run_cannot_act(self, coordinator, runs, dispatcher, tenant):
+        run = await _running_run(runs, tenant)
+        done = await coordinator.complete(run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.propose(done, _refund("1000"))
+
+        assert dispatcher.dispatch_count == 0
+
+    async def test_a_run_that_never_started_cannot_be_completed(
+        self, coordinator, runs, tenant
+    ):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.complete(run)
+
+    async def test_a_run_waiting_on_a_human_cannot_be_completed(
+        self, coordinator, runs, gateway, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        halted = await coordinator.propose(run, _refund("84000"))
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.complete(halted.run)
+
+        # The question is still open, and still somebody's to answer.
+        request = await gateway.get(tenant, halted.approval_id)
+        assert request.state is ApprovalState.PENDING
+
+    async def test_a_run_with_an_effect_in_doubt_is_not_a_success(
+        self, coordinator, runs, dispatcher, ledger, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        result = await coordinator.propose(run, _refund("1000"))
+        assert result.outcome.indeterminate
+
+        with pytest.raises(IndeterminateError):
+            await coordinator.complete(result.run)
+
+        # Still RUNNING, and the chain has no entry claiming otherwise.
+        assert (await runs.get(tenant, run.id)).state is RunState.RUNNING
+        events = [e.event_type for e in await ledger.read(tenant, run.id)]
+        assert LedgerEventType.RUN_COMPLETED not in events
+
+    async def test_the_refusal_names_the_effect_that_is_in_doubt(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        refund = _refund("1000")
+        result = await coordinator.propose(run, refund)
+
+        with pytest.raises(IndeterminateError) as caught:
+            await coordinator.complete(result.run)
+
+        assert caught.value.action_id == refund.id
+        assert caught.value.idempotency_key == refund.idempotency_key
+
+    async def test_it_completes_once_the_doubt_is_reconciled(
+        self, coordinator, runs, dispatcher, ledger, clock, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        result = await coordinator.propose(run, _refund("1000"))
+
+        await clock.advance(timedelta(hours=1))
+        report = await Reconciler(
+            idempotency=coordinator._executor._idempotency,
+            lookup=_NeverSawIt(),
+            ledger=ledger,
+            clock=clock,
+        ).sweep()
+        assert report.not_found == 1
+
+        done = await coordinator.complete(result.run)
+
+        assert done.state is RunState.SUCCEEDED
+
+    async def test_a_definite_failure_does_not_block_completion(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        # The provider said no. That is an answer, and a run can finish
+        # having been told no about one of the things it tried.
+        run = await _running_run(runs, tenant)
+        dispatcher.fail_next(FailureClass.INVALID_REQUEST)
+        result = await coordinator.propose(run, _refund("1000"))
+        assert not result.outcome.succeeded
+
+        done = await coordinator.complete(result.run)
+
+        assert done.state is RunState.SUCCEEDED
+
+    async def test_a_run_cannot_be_completed_twice(self, coordinator, runs, ledger, tenant):
+        run = await _running_run(runs, tenant)
+        done = await coordinator.complete(run)
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.complete(done)
+
+        completions = [
+            e
+            for e in await ledger.read(tenant, run.id)
+            if e.event_type is LedgerEventType.RUN_COMPLETED
+        ]
+        assert len(completions) == 1
+
+
+class TestTheWholeLifeOfARun:
+    async def test_start_to_finish_reads_as_one_verified_chain(
+        self, coordinator, runs, ledger, tenant
+    ):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+
+        running = await coordinator.start(run)
+        result = await coordinator.propose(running, _refund("1000"))
+        await coordinator.complete(result.run)
+
+        events = [e.event_type.value for e in await ledger.read(tenant, run.id)]
+        assert events == [
+            "run.started",
+            "action.proposed",
+            "action.evaluated",
+            "action.dispatched",
+            "action.settled",
+            "run.completed",
+        ]
+        await ledger.verify_chain(tenant, run.id)
