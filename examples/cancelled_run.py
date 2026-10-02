@@ -78,7 +78,7 @@ async def main() -> None:
     run = await runs.create(
         RunSpec(tenant_id=tenant, objective="Clear this week's duplicate-charge queue")
     )
-    run = await runs.save(run.start(at=clock.now()), expected_version=0)
+    run = await coordinator.start(run)
 
     # --- it stops for a human ---------------------------------------------
     refund = build_refund("ord_2002", "84000")

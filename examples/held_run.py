@@ -72,7 +72,7 @@ async def main() -> None:
     run = await runs.create(
         RunSpec(tenant_id=tenant, objective="Clear this week's duplicate-charge queue")
     )
-    run = await runs.save(run.start(at=clock.now()), expected_version=0)
+    run = await coordinator.start(run)
 
     # --- the batch is under way -------------------------------------------
     first = await coordinator.propose(run, build_refund("ord_3001", "1200"))

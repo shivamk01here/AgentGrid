@@ -75,7 +75,7 @@ async def main() -> None:
     run = await runs.create(
         RunSpec(tenant_id=tenant, objective="Clear today's duplicate-charge queue")
     )
-    run = await runs.save(run.start(at=clock.now()), expected_version=0)
+    run = await coordinator.start(run)
 
     # --- a small one: straight through -----------------------------------
     small = build_refund("ord_1001", "1200")
@@ -100,6 +100,10 @@ async def main() -> None:
     # --- the same refund again: replayed, not repaid ---------------------
     again = await coordinator.propose(resumed.run, build_refund("ord_1001", "1200"))
     print(f"duplicate     -> replayed={again.outcome.replayed} dispatches={dispatcher.dispatch_count}")
+
+    # --- the queue is clear: close the run out ----------------------------
+    done = await coordinator.complete(again.run, summary="Two duplicate charges refunded")
+    print(f"complete      -> state={done.state.value}")
 
     # --- the audit trail --------------------------------------------------
     await ledger.verify_chain(tenant, run.id)
