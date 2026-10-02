@@ -23,6 +23,7 @@ from ledgerloop.core.enums import (
     ApprovalState,
     Currency,
     FailureClass,
+    IdempotencyState,
     LedgerEventType,
     RiskTier,
     RunState,
@@ -35,7 +36,7 @@ from ledgerloop.core.errors import (
     StateTransitionError,
 )
 from ledgerloop.core.ids import ActionId, IdempotencyKey, TenantId
-from ledgerloop.core.models import Action, RunBudget, RunSpec
+from ledgerloop.core.models import Action, ActionReceipt, RunBudget, RunSpec
 from ledgerloop.core.money import Money
 from ledgerloop.policy import ThresholdPolicyEngine
 from ledgerloop.runtime import ActionExecutor, Reconciler, RunCoordinator
@@ -721,6 +722,20 @@ class _NeverSawIt:
         return None
 
 
+class _ItLanded:
+    """A provider that confirms whatever it is asked about."""
+
+    def __init__(self, action: Action) -> None:
+        self._action = action
+
+    async def lookup(self, key, tenant_id):
+        return ActionReceipt(
+            action_id=self._action.id,
+            state=IdempotencyState.SUCCEEDED,
+            provider_reference="psp_late_1",
+        )
+
+
 class TestComplete:
     async def test_completing_a_running_run(self, coordinator, runs, tenant, clock):
         run = await _running_run(runs, tenant)
@@ -741,8 +756,7 @@ class TestComplete:
         entry = (await ledger.read(tenant, run.id))[-1]
         assert entry.event_type is LedgerEventType.RUN_COMPLETED
         assert entry.payload["summary"] == "One duplicate charge refunded"
-        assert entry.payload["value_moved_minor"] == 100_000
-        assert entry.payload["currency"] == "INR"
+        assert entry.payload["value_moved"] == {"INR": 100_000}
         assert entry.payload["effects_standing"] == 1
         await ledger.verify_chain(tenant, run.id)
 
@@ -752,7 +766,7 @@ class TestComplete:
         await coordinator.complete(run)
 
         entry = (await ledger.read(tenant, run.id))[-1]
-        assert entry.payload["value_moved_minor"] is None
+        assert entry.payload["value_moved"] == {}
         assert entry.payload["effects_standing"] == 0
 
     async def test_a_completed_run_cannot_act(self, coordinator, runs, dispatcher, tenant):
@@ -834,6 +848,52 @@ class TestComplete:
         done = await coordinator.complete(result.run)
 
         assert done.state is RunState.SUCCEEDED
+
+    async def test_the_total_includes_what_the_reconciler_confirmed(
+        self, coordinator, runs, dispatcher, ledger, clock, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        refund = _refund("1000")
+        result = await coordinator.propose(run, refund)
+        # Nobody heard back, so the run's own running total never moved.
+        assert result.run.value_moved is None
+
+        await clock.advance(timedelta(hours=1))
+        await Reconciler(
+            idempotency=coordinator._executor._idempotency,
+            lookup=_ItLanded(refund),
+            ledger=ledger,
+            clock=clock,
+        ).sweep()
+        await coordinator.complete(result.run)
+
+        # It did go out, and the closing entry has to say so.
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.payload["value_moved"] == {"INR": 100_000}
+
+    async def test_a_hold_is_not_in_the_total(
+        self, coordinator, runs, gateway, ledger, clock, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        hold = Action(
+            id=ActionId.generate(),
+            kind=ActionKind.HOLD,
+            description="Hold pending chargeback review",
+            amount=Money.from_major("1000", Currency.INR),
+            counterparty="acc_44",
+        )
+        halted = await coordinator.propose(run, hold)
+        await gateway.submit(
+            tenant, halted.approval_id, approved=True, actor=APPROVER, at=clock.now()
+        )
+        result = await coordinator.resume(halted.run, hold)
+
+        await coordinator.complete(result.run)
+
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.payload["value_moved"] == {}
+        assert entry.payload["effects_standing"] == 1
 
     async def test_a_definite_failure_does_not_block_completion(
         self, coordinator, runs, dispatcher, tenant

@@ -56,6 +56,7 @@ from ledgerloop.core.models import Action, PolicyDecision, Run
 from ledgerloop.runtime.effects import exposure, replay_effects
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
     from ledgerloop.core.ids import ApprovalId
@@ -66,6 +67,7 @@ if TYPE_CHECKING:
         PolicyEngine,
         RunStore,
     )
+    from ledgerloop.runtime.effects import AppliedEffect
     from ledgerloop.runtime.executor import ActionExecutor, ExecutionOutcome
 
 logger = logging.getLogger(__name__)
@@ -350,7 +352,6 @@ class RunCoordinator:
             )
 
         succeeded = await self._save(run.succeed(at=self._clock.now()))
-        moved = succeeded.value_moved
         await self._write(
             succeeded,
             LedgerEventType.RUN_COMPLETED,
@@ -358,8 +359,7 @@ class RunCoordinator:
                 "summary": summary,
                 "stop_reason": StopReason.COMPLETED.value,
                 "effects_standing": len(standing),
-                "value_moved_minor": None if moved is None else moved.minor_units,
-                "currency": None if moved is None else moved.currency.value,
+                "value_moved": _value_moved(standing),
             },
         )
         logger.info("Run %s completed", run.id)
@@ -607,6 +607,25 @@ class RunCoordinator:
             )
         except Exception:
             logger.exception("Ledger write failed for %s on run %s", event.value, run.id)
+
+
+def _value_moved(standing: Sequence[AppliedEffect]) -> dict[str, int]:
+    """What a finished run moved, in minor units per currency.
+
+    Added up from the effects its ledger shows standing rather than read off
+    `Run.value_moved`. That field is only advanced when a dispatch comes
+    straight back with a success, so an effect that timed out and was later
+    confirmed by the reconciler is in the chain and missing from the field -
+    and the closing entry is the last place that should be a figure for what
+    we happened to hear about first time.
+    """
+    totals: dict[str, int] = {}
+    for effect in standing:
+        if not effect.kind.moves_value or effect.amount is None:
+            continue
+        code = effect.amount.currency.value
+        totals[code] = totals.get(code, 0) + abs(effect.amount).minor_units
+    return totals
 
 
 def _summarize(action: Action) -> dict[str, object]:
