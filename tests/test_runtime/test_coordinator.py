@@ -39,7 +39,7 @@ from ledgerloop.core.ids import ActionId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, ActionReceipt, RunBudget, RunSpec
 from ledgerloop.core.money import Money
 from ledgerloop.policy import ThresholdPolicyEngine
-from ledgerloop.runtime import ActionExecutor, Reconciler, RunCoordinator
+from ledgerloop.runtime import ActionExecutor, Reconciler, RunCoordinator, replay_effects
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 APPROVER = "ops@example.com"
@@ -967,6 +967,107 @@ class TestComplete:
             if e.event_type is LedgerEventType.RUN_COMPLETED
         ]
         assert len(completions) == 1
+
+
+class TestFail:
+    async def test_failing_a_running_run(self, coordinator, runs, tenant, clock):
+        run = await _running_run(runs, tenant)
+
+        failed = await coordinator.fail(run, "the refund provider is decommissioned")
+
+        assert failed.state is RunState.FAILED
+        assert failed.failure_reason == "the refund provider is decommissioned"
+        assert failed.stop_reason is StopReason.ERROR
+        assert failed.ended_at == clock.now()
+        assert (await runs.get(tenant, run.id)).state is RunState.FAILED
+
+    async def test_the_failure_is_ledgered(self, coordinator, runs, ledger, tenant):
+        run = await _running_run(runs, tenant)
+
+        await coordinator.fail(run, "unrecoverable tool error")
+
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.event_type is LedgerEventType.RUN_FAILED
+        assert entry.payload["reason"] == "unrecoverable tool error"
+        assert entry.payload["stop_reason"] == StopReason.ERROR.value
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_a_caller_can_name_a_more_specific_stop_reason(
+        self, coordinator, runs, ledger, tenant
+    ):
+        run = await _running_run(runs, tenant)
+
+        failed = await coordinator.fail(
+            run, "the model declined to continue", stop_reason=StopReason.REFUSED
+        )
+
+        assert failed.stop_reason is StopReason.REFUSED
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.payload["stop_reason"] == StopReason.REFUSED.value
+
+    async def test_a_failed_run_cannot_act(self, coordinator, runs, dispatcher, tenant):
+        run = await _running_run(runs, tenant)
+        failed = await coordinator.fail(run, "unrecoverable tool error")
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.propose(failed, _refund("1000"))
+
+        assert dispatcher.dispatch_count == 0
+
+    async def test_a_run_that_never_started_cannot_be_failed(self, coordinator, runs, tenant):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Handle exceptions"))
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.fail(run, "never ran")
+
+    async def test_a_halted_run_cannot_be_failed_out_from_under_its_approval(
+        self, coordinator, runs, gateway, tenant
+    ):
+        run = await _running_run(runs, tenant)
+        halted = await coordinator.propose(run, _refund("84000"))
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.fail(halted.run, "giving up")
+
+        stored = await runs.get(tenant, run.id)
+        assert stored.state is RunState.AWAITING_APPROVAL
+        assert stored.pending_approval_id == halted.approval_id
+
+    async def test_a_run_cannot_be_failed_twice(self, coordinator, runs, ledger, tenant):
+        run = await _running_run(runs, tenant)
+        failed = await coordinator.fail(run, "unrecoverable tool error")
+
+        with pytest.raises(StateTransitionError):
+            await coordinator.fail(failed, "again")
+
+        failures = [
+            e
+            for e in await ledger.read(tenant, run.id)
+            if e.event_type is LedgerEventType.RUN_FAILED
+        ]
+        assert len(failures) == 1
+
+    async def test_fail_does_not_touch_what_the_run_already_applied(
+        self, coordinator, runs, ledger, tenant
+    ):
+        # fail() ends the run; it is not the compensator. An effect the run
+        # already dispatched is still there to be found afterwards.
+        run = await _running_run(runs, tenant)
+        result = await coordinator.propose(run, _refund("1000"))
+
+        await coordinator.fail(result.run, "giving up on the rest of the batch")
+
+        standing = replay_effects(await ledger.read(tenant, run.id))
+        assert len(standing) == 1
+        assert standing[0].amount == Money.from_major("1000", Currency.INR)
+
+    async def test_two_workers_failing_the_same_run(self, coordinator, runs, tenant):
+        run = await _running_run(runs, tenant)
+        await coordinator.fail(run, "first worker gave up")
+
+        # The second worker still holds the pre-failure copy it read.
+        with pytest.raises(ConcurrencyError):
+            await coordinator.fail(run, "second worker gave up too")
 
 
 class TestTheWholeLifeOfARun:
