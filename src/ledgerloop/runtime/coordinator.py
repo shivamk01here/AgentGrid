@@ -11,11 +11,15 @@ The halt is the interesting case. A halted run is durable: it can sit for
 days waiting on a human and then resume on the same action it stopped at,
 without re-running anything it already did.
 
-The two ends of a run go through here as well. `start` takes a PENDING run to
-RUNNING and `complete` takes a RUNNING one to SUCCEEDED, and each writes the
-ledger entry that says so - a chain that opens on its first action and stops
-after its last one does not say whether the run is finished or was abandoned.
-`complete` will not finish a run that still has an effect in doubt.
+The ends of a run go through here as well. `start` takes a PENDING run to
+RUNNING, `complete` takes a RUNNING one to SUCCEEDED, and `fail` takes a
+RUNNING one to FAILED on the caller's own say-so - and each writes the ledger
+entry that says so, because a chain that opens on its first action and stops
+after its last one does not say whether the run finished or was abandoned.
+`complete` will not finish a run that still has an effect in doubt. `fail` is
+the caller's own door out, next to the two the coordinator already walks a
+run through itself: the value ceiling tripping, and a halted run's approval
+coming back rejected or expired.
 
 A run can also be held by hand. `suspend` parks a RUNNING run without asking
 anyone for anything, `lift_hold` puts it back, and while it is held nothing
@@ -374,6 +378,49 @@ class RunCoordinator:
         )
         logger.info("Run %s completed", run.id)
         return succeeded
+
+    async def fail(
+        self, run: Run, reason: str, *, stop_reason: StopReason = StopReason.ERROR
+    ) -> Run:
+        """End a RUNNING run as FAILED at the caller's own judgment.
+
+        For when the run itself cannot go on - an unrecoverable tool error,
+        an agent loop giving up after its own retries - as opposed to
+        `cancel`, which is an operator or caller ending a run that could
+        otherwise have continued. The value ceiling and a rejected or expired
+        approval already end a run this way internally; this is the same
+        ending, open to a caller that hits a failure the coordinator has no
+        way to see for itself.
+
+        Nothing standing in the run's ledger is touched. A run that moved
+        money before it failed may need the compensator afterwards - that is
+        a separate decision, not one this method makes for the caller.
+
+        Args:
+            run: The run to fail. Must be RUNNING.
+            reason: Recorded on the ledger and on the run itself.
+            stop_reason: Defaults to ERROR. Pass a more specific one - for
+                example BUDGET_EXHAUSTED or REFUSED - when the caller knows
+                which it is; a reader of the chain only has this to go on.
+
+        Returns:
+            The run, FAILED.
+
+        Raises:
+            StateTransitionError: The run is not RUNNING.
+            ConcurrencyError: Another worker advanced the run first.
+        """
+        if run.state is not RunState.RUNNING:
+            raise StateTransitionError("Run", run.state.value, RunState.FAILED.value)
+
+        failed = await self._save(run.fail(reason, at=self._clock.now(), stop_reason=stop_reason))
+        await self._write(
+            failed,
+            LedgerEventType.RUN_FAILED,
+            {"reason": reason, "stop_reason": stop_reason.value},
+        )
+        logger.info("Run %s failed: %s", run.id, reason)
+        return failed
 
     async def cancel(self, run: Run, *, reason: str | None = None) -> Run:
         """Cancel a run at an operator's or caller's request.
