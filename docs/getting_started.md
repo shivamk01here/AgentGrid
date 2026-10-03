@@ -6,13 +6,17 @@
 pip install ledgerloop
 ```
 
-For optional dependencies:
+For the Anthropic provider:
 
 ```bash
-pip install ledgerloop[all]    # Everything
-pip install ledgerloop[memory] # SQLite memory backend
-pip install ledgerloop[http]   # HTTP client for tool integrations
+pip install ledgerloop[anthropic]
 ```
+
+There is no `[memory]` or `[http]` extra - `pyproject.toml` only defines
+`dev`, `anthropic`, and `all` (which is `anthropic` under another name
+today). `MemoryEngine` and `HttpTool` both work out of the box; a SQLite or
+Redis memory backend is something you write against `MemoryBackend`
+yourself, not a package ledgerloop ships.
 
 ## Quick Start
 
@@ -173,6 +177,7 @@ See `examples/expired_approval.py` for a full run of this in memory.
 
 ## Next Steps
 
-- Read the [Architecture Guide](architecture.md)
+- Read the [Architecture](../README.md#architecture) section of the README
 - Check out the [Examples](../examples/)
-- Browse the [API Reference](api.md)
+- Read the source - every port in `core/ports.py` and every public method in
+  `runtime/` carries a docstring written for exactly this question
