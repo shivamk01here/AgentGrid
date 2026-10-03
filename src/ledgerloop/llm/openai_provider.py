@@ -140,10 +140,18 @@ class OpenAIProvider:
             ]
 
         usage = response.usage
+        finish_reason = response.choices[0].finish_reason or "end_turn"
+        # LLMResponse is documented as normalized across providers, and the
+        # loop's refusal check is a bare string comparison against "refusal" -
+        # the value Anthropic's own API happens to use. OpenAI has no such
+        # stop reason; it reports a safety decline as finish_reason
+        # "content_filter", which otherwise sails through as an ordinary
+        # completed turn with no refusal ever detected.
+        stop_reason = "refusal" if finish_reason == "content_filter" else finish_reason
         return LLMResponse(
             text="".join(text_parts),
             tool_calls=tuple(tool_calls),
-            stop_reason=response.choices[0].finish_reason or "end_turn",
+            stop_reason=stop_reason,
             usage=TokenUsage(
                 input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
                 output_tokens=getattr(usage, "completion_tokens", 0) or 0,

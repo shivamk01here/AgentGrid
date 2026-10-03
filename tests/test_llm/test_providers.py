@@ -141,6 +141,47 @@ async def test_openai_provider_echoes_the_tool_calls_it_parsed():
     assert response.raw_content["content"] is None
 
 
+@pytest.mark.asyncio
+async def test_openai_provider_content_filter_is_a_refusal():
+    client = DummyOpenAIClient()
+
+    class RefusingCompletions:
+        async def create(self, **kwargs):
+            return DummyResponse(
+                choices=[
+                    DummyChoice(DummyMessage(content=None), finish_reason="content_filter")
+                ],
+                usage=DummyUsage(),
+            )
+
+    client.chat.completions = RefusingCompletions()
+
+    provider = OpenAIProvider(client=client, model="gpt-4o")
+    response = await provider.complete(
+        system="", messages=[{"role": "user", "content": "do something unsafe"}]
+    )
+
+    # "refusal" is the one string the loop and LLMResponse.refused both
+    # compare against - OpenAI's own finish_reason for this is
+    # "content_filter", and never reaching "refusal" would mean the decline
+    # sails through as an ordinary completed turn.
+    assert response.stop_reason == "refusal"
+    assert response.refused
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_an_ordinary_stop_is_not_a_refusal():
+    client = DummyOpenAIClient()
+    provider = OpenAIProvider(client=client, model="gpt-4o")
+
+    response = await provider.complete(
+        system="", messages=[{"role": "user", "content": "Hi"}]
+    )
+
+    assert response.stop_reason == "stop"
+    assert not response.refused
+
+
 def test_openai_build_tool_result_messages():
     provider = OpenAIProvider(client=DummyOpenAIClient())
     results = [("call_123", "Sunny", False), ("call_456", "Error!", True)]
