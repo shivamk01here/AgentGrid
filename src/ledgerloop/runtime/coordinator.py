@@ -381,9 +381,12 @@ class RunCoordinator:
         ending, open to a caller that hits a failure the coordinator has no
         way to see for itself.
 
-        Nothing standing in the run's ledger is touched. A run that moved
-        money before it failed may need the compensator afterwards - that is
-        a separate decision, not one this method makes for the caller.
+        Nothing standing in the run's ledger is touched, and nothing can be
+        afterwards: FAILED is terminal, and the compensator only takes a
+        RUNNING run. A caller that wants what the run moved walked back
+        calls `Compensator.compensate` instead of this, not after it - the
+        compensator ends the run itself, COMPENSATED or FAILED depending on
+        how much it managed to undo.
 
         Args:
             run: The run to fail. Must be RUNNING.

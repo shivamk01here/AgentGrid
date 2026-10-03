@@ -40,7 +40,13 @@ from ledgerloop.core.ids import ActionId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, ActionReceipt, Run, RunBudget, RunSpec
 from ledgerloop.core.money import Money
 from ledgerloop.policy import ThresholdPolicyEngine
-from ledgerloop.runtime import ActionExecutor, Reconciler, RunCoordinator, replay_effects
+from ledgerloop.runtime import (
+    ActionExecutor,
+    Compensator,
+    Reconciler,
+    RunCoordinator,
+    replay_effects,
+)
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 APPROVER = "ops@example.com"
@@ -1167,6 +1173,28 @@ class TestFail:
         standing = replay_effects(await ledger.read(tenant, run.id))
         assert len(standing) == 1
         assert standing[0].amount == Money.from_major("1000", Currency.INR)
+
+    async def test_a_failed_run_is_past_the_compensator(
+        self, coordinator, runs, ledger, dispatcher, tenant, clock
+    ):
+        # fail() is the way out without a rollback. Once it has been taken,
+        # the compensator refuses the run - so a caller that wanted the money
+        # back had to call compensate() instead, not afterwards.
+        run = await _running_run(runs, tenant)
+        result = await coordinator.propose(run, _refund("1000"))
+        failed = await coordinator.fail(result.run, "giving up")
+
+        compensator = Compensator(
+            runs=runs,
+            ledger=ledger,
+            dispatcher=dispatcher,
+            idempotency=coordinator._executor._idempotency,
+            clock=clock,
+        )
+        with pytest.raises(StateTransitionError):
+            await compensator.compensate(failed)
+
+        assert dispatcher.compensated == []
 
     async def test_two_workers_failing_the_same_run(self, coordinator, runs, tenant):
         run = await _running_run(runs, tenant)
