@@ -263,7 +263,7 @@ class PolicyViolationError(LedgerloopError):
         self.rule_id = rule_id
 
 
-class ApprovalRequired(LedgerloopError):
+class ApprovalRequired(LedgerloopError):  # noqa: N818 - a signal, not an error; public name
     """Control-flow signal: the run must halt for a human decision.
 
     An exception rather than a return value so that it cannot be ignored by

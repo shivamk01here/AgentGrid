@@ -3,10 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime
-from typing import Any
+import hashlib
+import json
+import operator
+import random
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from typing import TYPE_CHECKING, Any
 
 from ledgerloop.tools.base import BaseTool, ToolResult
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class DateTimeTool(BaseTool):
@@ -74,7 +87,7 @@ class TextTransformTool(BaseTool):
         text = kwargs["text"]
         operation = kwargs["operation"]
 
-        ops = {
+        ops: dict[str, Callable[[str], Any]] = {
             "upper": lambda t: t.upper(),
             "lower": lambda t: t.lower(),
             "reverse": lambda t: t[::-1],
@@ -153,7 +166,6 @@ class CounterTool(BaseTool):
     def counters(self) -> dict[str, int]:
         """Read-only view of all counter values."""
         return dict(self._counters)
-import base64
 
 
 class Base64Tool(BaseTool):
@@ -197,8 +209,6 @@ class Base64Tool(BaseTool):
 
         return ToolResult.ok(output, action=action)
 
-import hashlib
-
 
 class HashTool(BaseTool):
     """Computes cryptographic hashes of text."""
@@ -238,8 +248,6 @@ class HashTool(BaseTool):
 
         return ToolResult.ok(output, algorithm=algorithm)
 
-import uuid
-
 
 class UUIDTool(BaseTool):
     """Generates UUIDs."""
@@ -262,8 +270,6 @@ class UUIDTool(BaseTool):
     async def execute(self, **kwargs: Any) -> ToolResult:
         output = str(uuid.uuid4())
         return ToolResult.ok(output)
-
-import operator
 
 
 class MathTool(BaseTool):
@@ -314,8 +320,6 @@ class MathTool(BaseTool):
         output = fn(a, b)
         return ToolResult.ok(output, operation=operation)
 
-import re
-
 
 class RegexTool(BaseTool):
     """Matches regular expressions against text."""
@@ -350,8 +354,6 @@ class RegexTool(BaseTool):
 
         matches = compiled.findall(text)
         return ToolResult.ok(matches, pattern=pattern)
-
-import json
 
 
 class JsonPathTool(BaseTool):
@@ -395,9 +397,6 @@ class JsonPathTool(BaseTool):
 
         return ToolResult.ok(parsed[key])
 
-import urllib.error
-import urllib.request
-
 
 class HttpTool(BaseTool):
     """Fetches text content from URLs."""
@@ -428,18 +427,19 @@ class HttpTool(BaseTool):
         # Run synchronous urlopen in a thread to avoid blocking the event loop
         loop = asyncio.get_running_loop()
         
-        def _fetch():
+        def _fetch() -> str:
             req = urllib.request.Request(
                 url, 
                 headers={'User-Agent': 'Ledgerloop-Agent/1.0'}
             )
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as response:
-                    return response.read().decode('utf-8')
+                    body: bytes = response.read()
+                    return body.decode('utf-8')
             except urllib.error.URLError as e:
-                raise RuntimeError(f"Failed to fetch {url}: {e.reason}")
+                raise RuntimeError(f"Failed to fetch {url}: {e.reason}") from e
             except Exception as e:
-                raise RuntimeError(f"Error fetching {url}: {e}")
+                raise RuntimeError(f"Error fetching {url}: {e}") from e
 
         try:
             content = await loop.run_in_executor(None, _fetch)
@@ -507,8 +507,6 @@ class StringLengthTool(BaseTool):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(len(text))
 
-import urllib.parse
-
 
 class UrlEncodeTool(BaseTool):
     """URL encodes a string."""
@@ -563,8 +561,6 @@ class UrlDecodeTool(BaseTool):
         if not isinstance(text, str):
             return ToolResult.fail("text must be a string")
         return ToolResult.ok(urllib.parse.unquote(text))
-
-import random
 
 
 class RandomIntTool(BaseTool):

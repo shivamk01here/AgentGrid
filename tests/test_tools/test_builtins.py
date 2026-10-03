@@ -1,5 +1,7 @@
 """Tests for built-in tools."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from ledgerloop.tools.builtins import (
@@ -313,7 +315,6 @@ class TestJsonPathTool:
         assert result.success is False
         assert "Invalid JSON" in result.error
 
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestHttpTool:

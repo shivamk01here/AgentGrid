@@ -31,7 +31,7 @@ class DummyToolCallFunction:
         self.arguments = arguments
 
 class DummyToolCall:
-    def __init__(self, id, function):
+    def __init__(self, id, function):  # noqa: A002 - mirrors the SDK attribute
         self.id = id
         self.function = function
 
@@ -226,7 +226,7 @@ class MockAsyncAnthropic:
         self.messages = MockAnthropicMessages(message_to_return)
 
 class MockAnthropicBlock:
-    def __init__(self, type_name, text="", thinking="", id="", name="", input=None):
+    def __init__(self, type_name, text="", thinking="", id="", name="", input=None):  # noqa: A002 - mirrors the SDK attributes
         self.type = type_name
         self.text = text
         self.thinking = thinking

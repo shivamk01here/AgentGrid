@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class RateLimitExceeded(Exception):
+class RateLimitExceeded(Exception):  # noqa: N818 - public name, renaming breaks callers
     """Raised when a rate-limited call exceeds its quota."""
 
     def __init__(self, key: str, retry_after: float | None = None) -> None:

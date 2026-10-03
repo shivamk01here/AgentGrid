@@ -114,14 +114,15 @@ class EventBus:
         if pattern_parts and pattern_parts[-1] == "*":
             if len(topic_parts) < len(pattern_parts) - 1:
                 return False
-            for p, t in zip(pattern_parts[:-1], topic_parts):
-                if p != "*" and p != t:
-                    return False
-            return True
+            # Not strict: the topic is allowed to run on past the prefix.
+            return all(
+                p in ("*", t)
+                for p, t in zip(pattern_parts[:-1], topic_parts, strict=False)
+            )
 
         if len(pattern_parts) != len(topic_parts):
             return False
         return all(
-            p == "*" or p == t
-            for p, t in zip(pattern_parts, topic_parts)
+            p in ("*", t)
+            for p, t in zip(pattern_parts, topic_parts, strict=True)
         )

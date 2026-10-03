@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from ledgerloop.agent.loop import AgentLoop
 
 if TYPE_CHECKING:
+    from ledgerloop.agent.loop import LoopResult
     from ledgerloop.llm.provider import LLMProvider
     from ledgerloop.tools.base import BaseTool
 
@@ -113,7 +114,7 @@ class Agent:
         result = await self.run_loop(input_data)
         return result.output
 
-    async def run_loop(self, input_data: str = "") -> Any:
+    async def run_loop(self, input_data: str = "") -> LoopResult:
         """Run the default loop and return the full `LoopResult`.
 
         Use this instead of `run()` when you need the step ledger, token
