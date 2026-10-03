@@ -8,7 +8,6 @@ Agents are good at the judgment work buried in payment operations. They are
 catastrophic at it without idempotency, an audit trail, and a human in the loop.
 Ledgerloop is the layer that makes the difference.
 
-[![CI](https://github.com/shivamk01here/ledgerloop/actions/workflows/ci.yml/badge.svg)](https://github.com/shivamk01here/ledgerloop/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Typed](https://img.shields.io/badge/mypy-strict-blue)](https://mypy-lang.org/)
