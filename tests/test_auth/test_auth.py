@@ -57,9 +57,22 @@ class TestAuthenticator:
     def test_create_with_permissions(self):
         auth = Authenticator()
         perms = [Permission(resource="db", level=PermissionLevel.WRITE)]
-        auth.create_identity("agent-1", permissions=perms)
-        identity = auth.verify(auth._identities["agent-1"].api_key_hash)
-        assert identity is None or True
+        api_key = auth.create_identity("agent-1", permissions=perms)
+
+        identity = auth.verify(api_key)
+
+        assert identity is not None
+        assert identity.agent_id == "agent-1"
+        assert identity.permissions == perms
+
+    def test_the_stored_hash_is_not_itself_a_key(self):
+        # verify() hashes what it is given. Handing it the stored hash must
+        # not authenticate - otherwise anyone who can read the identity
+        # table can log in as everyone in it.
+        auth = Authenticator()
+        auth.create_identity("agent-1")
+
+        assert auth.verify(auth._identities["agent-1"].api_key_hash) is None
 
     def test_multiple_identities(self):
         auth = Authenticator()

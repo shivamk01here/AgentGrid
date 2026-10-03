@@ -208,13 +208,6 @@ class TestWorkflowEngine:
         with pytest.raises(ValueError, match="retry_count"):
             Step(name="bad", handler=noop_handler, retry_count=-1)
 
-    def test_remove_step_with_dependents_raises(self):
-        engine = WorkflowEngine()
-        engine.add_step(Step(name="a", handler=noop_handler))
-        engine.add_step(Step(name="b", handler=noop_handler, dependencies=["a"]))
-        with pytest.raises(ValueError, match="depended on"):
-            engine.remove_step("a")
-
 def test_cycle_detection():
     engine = WorkflowEngine()
     

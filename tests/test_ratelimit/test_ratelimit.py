@@ -216,12 +216,11 @@ class TestRateLimitMiddleware:
 
         wrapped = mw.wrap("mykey", noop)
         asyncio.get_event_loop().run_until_complete(wrapped())
-        try:
+        with pytest.raises(RateLimitExceeded) as caught:
             asyncio.get_event_loop().run_until_complete(wrapped())
-            assert False, "should have raised"
-        except RateLimitExceeded as exc:
-            assert exc.key == "mykey"
-            assert exc.retry_after is not None
+
+        assert caught.value.key == "mykey"
+        assert caught.value.retry_after is not None
 
     def test_reset_empty_string_key(self, limiter):
         asyncio.get_event_loop().run_until_complete(limiter.try_acquire("a"))
