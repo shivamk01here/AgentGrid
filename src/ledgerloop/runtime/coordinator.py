@@ -272,22 +272,11 @@ class RunCoordinator:
                 if request.state is ApprovalState.EXPIRED
                 else StopReason.CANCELLED
             )
-            reason = f"Approval {request.state.value}"
-            failed = await self._save(
-                resumed.fail(reason, at=self._clock.now(), stop_reason=stop_reason)
-            )
-            # The run itself just reached a terminal state, and that belongs
-            # in the chain on its own account - not folded into the approval
-            # event next to it, where a reader scanning for RUN_FAILED would
-            # never find it.
-            await self._write(
-                failed,
-                LedgerEventType.RUN_FAILED,
-                {
-                    "reason": reason,
-                    "stop_reason": stop_reason.value,
-                    "approval_id": str(request.id),
-                },
+            failed = await self._fail(
+                resumed,
+                f"Approval {request.state.value}",
+                stop_reason=stop_reason,
+                detail={"approval_id": str(request.id)},
             )
             await self._write(
                 failed,
@@ -413,12 +402,7 @@ class RunCoordinator:
         if run.state is not RunState.RUNNING:
             raise StateTransitionError("Run", run.state.value, RunState.FAILED.value)
 
-        failed = await self._save(run.fail(reason, at=self._clock.now(), stop_reason=stop_reason))
-        await self._write(
-            failed,
-            LedgerEventType.RUN_FAILED,
-            {"reason": reason, "stop_reason": stop_reason.value},
-        )
+        failed = await self._fail(run, reason, stop_reason=stop_reason)
         logger.info("Run %s failed: %s", run.id, reason)
         return failed
 
@@ -601,16 +585,12 @@ class RunCoordinator:
             return
 
         logger.error("Run %s stopped at its value ceiling: %s", run.id, reason)
-        failed = await self._save(
-            run.fail(reason, at=self._clock.now(), stop_reason=StopReason.BUDGET_EXHAUSTED)
-        )
-        await self._write(
-            failed,
-            LedgerEventType.RUN_FAILED,
-            {
+        await self._fail(
+            run,
+            reason,
+            stop_reason=StopReason.BUDGET_EXHAUSTED,
+            detail={
                 "action_id": str(action.id),
-                "reason": reason,
-                "stop_reason": StopReason.BUDGET_EXHAUSTED.value,
                 "ceiling_minor": ceiling.minor_units,
                 "currency": ceiling.currency.value,
             },
@@ -649,6 +629,35 @@ class RunCoordinator:
                 # correctness one.
                 logger.exception("Could not record value moved for run %s", run.id)
         return run, outcome
+
+    async def _fail(
+        self,
+        run: Run,
+        reason: str,
+        *,
+        stop_reason: StopReason,
+        detail: dict[str, object] | None = None,
+    ) -> Run:
+        """Move a run to FAILED and write the RUN_FAILED entry that says why.
+
+        Every way the coordinator fails a run goes through here: the value
+        ceiling, a rejected or expired approval, and `fail` itself. One of
+        those three used to transition the run without the entry, and a
+        reader looking for why a run ended had nothing to find. With one
+        writer, a fourth way cannot be added that forgets it.
+
+        Args:
+            run: The run to fail, in a state that can legally reach FAILED.
+            reason: Recorded on the run and on the ledger.
+            stop_reason: Why the run stopped, in the closed vocabulary.
+            detail: Extra fields for the entry - the action that tripped the
+                ceiling, the approval that was turned down.
+        """
+        failed = await self._save(run.fail(reason, at=self._clock.now(), stop_reason=stop_reason))
+        payload: dict[str, object] = {"reason": reason, "stop_reason": stop_reason.value}
+        payload.update(detail or {})
+        await self._write(failed, LedgerEventType.RUN_FAILED, payload)
+        return failed
 
     async def _save(self, run: Run) -> Run:
         """Persist a transitioned run at its new version."""
