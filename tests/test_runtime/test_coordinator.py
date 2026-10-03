@@ -30,13 +30,14 @@ from ledgerloop.core.enums import (
     StopReason,
 )
 from ledgerloop.core.errors import (
+    BudgetExhaustedError,
     ConcurrencyError,
     IndeterminateError,
     PolicyViolationError,
     StateTransitionError,
 )
 from ledgerloop.core.ids import ActionId, IdempotencyKey, TenantId
-from ledgerloop.core.models import Action, ActionReceipt, RunBudget, RunSpec
+from ledgerloop.core.models import Action, ActionReceipt, Run, RunBudget, RunSpec
 from ledgerloop.core.money import Money
 from ledgerloop.policy import ThresholdPolicyEngine
 from ledgerloop.runtime import ActionExecutor, Reconciler, RunCoordinator, replay_effects
@@ -455,6 +456,112 @@ class TestValueMoved:
         assert result.outcome.succeeded
         assert dispatcher.dispatch_count == 1
         assert result.run.value_moved is None
+
+
+async def _running_run_with_budget(runs, tenant, budget: RunBudget) -> Run:
+    run = await runs.create(
+        RunSpec(tenant_id=tenant, objective="Handle exceptions", budget=budget)
+    )
+    started = run.start(at=AT)
+    return await runs.save(started, expected_version=0)
+
+
+class TestValueCeiling:
+    """The run's own budget has the last word on money, ahead of any policy."""
+
+    async def test_a_single_action_over_the_ceiling_stops_the_run(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        budget = RunBudget(max_value_moved=Money.from_major("1000", Currency.INR))
+        run = await _running_run_with_budget(runs, tenant, budget)
+
+        with pytest.raises(BudgetExhaustedError):
+            await coordinator.propose(run, _refund("1200"))
+
+        assert dispatcher.dispatch_count == 0
+        assert (await runs.get(tenant, run.id)).state is RunState.FAILED
+
+    async def test_the_ceiling_counts_what_the_run_already_moved(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        # Two distinct effects - different amounts, so different idempotency
+        # keys - rather than the same action proposed twice, which the
+        # ceiling has to let through as a replay rather than a second charge.
+        budget = RunBudget(max_value_moved=Money.from_major("1500", Currency.INR))
+        run = await _running_run_with_budget(runs, tenant, budget)
+        first = await coordinator.propose(run, _refund("1000"))
+        assert first.executed
+
+        with pytest.raises(BudgetExhaustedError):
+            await coordinator.propose(first.run, _refund("600"))
+
+        assert dispatcher.dispatch_count == 1
+
+    async def test_the_stop_is_ledgered_with_the_ceiling_and_the_action(
+        self, coordinator, runs, ledger, tenant
+    ):
+        budget = RunBudget(max_value_moved=Money.from_major("1000", Currency.INR))
+        run = await _running_run_with_budget(runs, tenant, budget)
+        action = _refund("1200")
+
+        with pytest.raises(BudgetExhaustedError):
+            await coordinator.propose(run, action)
+
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.event_type is LedgerEventType.RUN_FAILED
+        assert entry.payload["stop_reason"] == StopReason.BUDGET_EXHAUSTED.value
+        assert entry.payload["action_id"] == str(action.id)
+        assert entry.payload["ceiling_minor"] == 100_000
+        assert entry.payload["currency"] == "INR"
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_replaying_a_standing_action_does_not_retrip_the_ceiling(
+        self, coordinator, runs, dispatcher, tenant
+    ):
+        # The action's own idempotency key is already in the chain - proposing
+        # it again replays the first outcome rather than moving anything new,
+        # and must not be counted as if it were a second 1000 on top of the
+        # first.
+        budget = RunBudget(max_value_moved=Money.from_major("1000", Currency.INR))
+        run = await _running_run_with_budget(runs, tenant, budget)
+        action = _refund("1000")
+        first = await coordinator.propose(run, action)
+        assert first.executed
+
+        again = await coordinator.propose(first.run, action)
+
+        assert again.outcome.replayed
+        assert dispatcher.dispatch_count == 1
+
+    async def test_an_amount_in_another_currency_fails_closed(self, coordinator, runs, tenant):
+        budget = RunBudget(max_value_moved=Money.from_major("1000", Currency.INR))
+        run = await _running_run_with_budget(runs, tenant, budget)
+        action = Action(
+            id=ActionId.generate(),
+            kind=ActionKind.REFUND,
+            description="Refund in the wrong currency for this run's ceiling",
+            amount=Money.from_major("10", Currency.USD),
+            counterparty="mer_1",
+            idempotency_key=IdempotencyKey.derive("refund", "usd_1"),
+        )
+
+        with pytest.raises(BudgetExhaustedError):
+            await coordinator.propose(run, action)
+
+    async def test_checked_before_an_approval_is_raised(
+        self, coordinator, runs, gateway, tenant
+    ):
+        # A reviewer signing off on an action the run could never carry out
+        # is a wasted signature at best - the ceiling has to be checked
+        # before anyone is asked, not after.
+        budget = RunBudget(max_value_moved=Money.from_major("1000", Currency.INR))
+        run = await _running_run_with_budget(runs, tenant, budget)
+
+        with pytest.raises(BudgetExhaustedError):
+            await coordinator.propose(run, _refund("84000"))
+
+        async for _ in gateway.list_pending(tenant):
+            pytest.fail("no approval should have been raised")
 
 
 class TestCancel:
