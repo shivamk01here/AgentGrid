@@ -46,7 +46,7 @@ class AnthropicProvider:
             except ImportError as exc:  # pragma: no cover - depends on install extras
                 raise LLMError(
                     "The anthropic package is required for AnthropicProvider. "
-                    "Install it with: pip install 'ledgerloop[anthropic]'"
+                    "Install it with: pip install anthropic"
                 ) from exc
             client = AsyncAnthropic()
         self._client = client

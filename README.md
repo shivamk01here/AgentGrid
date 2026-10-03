@@ -8,7 +8,7 @@ Agents are good at the judgment work buried in payment operations. They are
 catastrophic at it without idempotency, an audit trail, and a human in the loop.
 Ledgerloop is the layer that makes the difference.
 
-[![CI](https://github.com/shivamk01here/AgentGrid/actions/workflows/ci.yml/badge.svg)](https://github.com/shivamk01here/AgentGrid/actions/workflows/ci.yml)
+[![CI](https://github.com/shivamk01here/ledgerloop/actions/workflows/ci.yml/badge.svg)](https://github.com/shivamk01here/ledgerloop/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Typed](https://img.shields.io/badge/mypy-strict-blue)](https://mypy-lang.org/)
@@ -88,8 +88,13 @@ no constructor that accepts a float, no arithmetic across currencies, and an
 ## Install
 
 ```bash
-pip install "ledgerloop[anthropic]"
+git clone https://github.com/shivamk01here/ledgerloop.git
+cd ledgerloop
+pip install -e .
 ```
+
+The core has no third-party dependencies. Install a model provider's SDK only
+if you use that provider.
 
 ## A first agent
 
@@ -480,7 +485,7 @@ Nothing here has executed against a real payment provider.
 ## Development
 
 ```bash
-pip install -e ".[dev,anthropic]"
+pip install -e ".[dev]"
 ruff check src/ tests/
 mypy src/ledgerloop/
 pytest

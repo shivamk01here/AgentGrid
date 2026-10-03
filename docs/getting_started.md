@@ -2,21 +2,21 @@
 
 ## Installation
 
-```bash
-pip install ledgerloop
-```
-
-For the Anthropic provider:
+Ledgerloop is not on PyPI yet. Install it from source:
 
 ```bash
-pip install ledgerloop[anthropic]
+git clone https://github.com/shivamk01here/ledgerloop.git
+cd ledgerloop
+pip install -e .
 ```
 
-There is no `[memory]` or `[http]` extra - `pyproject.toml` only defines
-`dev`, `anthropic`, and `all` (which is `anthropic` under another name
-today). `MemoryEngine` and `HttpTool` both work out of the box; a SQLite or
-Redis memory backend is something you write against `MemoryBackend`
-yourself, not a package ledgerloop ships.
+The core has no third-party dependencies. A model provider's SDK is only
+needed if you use that provider, and you install it yourself - the same way
+for every provider, for example `pip install openai`.
+
+There are no `[memory]` or `[http]` extras. `MemoryEngine` and `HttpTool`
+work out of the box; a SQLite or Redis memory backend is something you write
+against `MemoryBackend`, not a package Ledgerloop ships.
 
 ## Quick Start
 
