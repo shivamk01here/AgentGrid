@@ -35,3 +35,6 @@ Thumbs.db
 
 # Docs build
 site/
+
+# Local working notes
+INSTRUCTIONS.md
