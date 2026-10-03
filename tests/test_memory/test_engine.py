@@ -1,9 +1,13 @@
 """Tests for the memory engine."""
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from ledgerloop.memory.engine import MemoryEngine
-from ledgerloop.memory.store import MemoryEntry
+
+if TYPE_CHECKING:
+    from ledgerloop.memory.store import MemoryEntry
 
 
 class TestMemoryEngine:

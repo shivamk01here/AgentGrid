@@ -12,7 +12,6 @@ these for tests and local development, never for real runs.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -24,7 +23,7 @@ from ledgerloop.core.ids import RunId, StepId, TenantId
 from ledgerloop.core.models import Run, RunSpec, Step
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import AsyncIterator, Sequence
 
     from ledgerloop.core.ports import Clock
 

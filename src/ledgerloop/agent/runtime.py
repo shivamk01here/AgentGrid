@@ -7,11 +7,11 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from ledgerloop.agent.base import Agent, AgentConfig
 from ledgerloop.events.bus import Event
 from ledgerloop.llm.provider import LLMError
 
 if TYPE_CHECKING:
+    from ledgerloop.agent.base import Agent
     from ledgerloop.ratelimit.limiter import RateLimiter
 
 logger = logging.getLogger(__name__)

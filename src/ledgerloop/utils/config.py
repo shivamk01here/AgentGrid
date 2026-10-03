@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
 
 def load_config(path: str | Path = ".env", apply: bool = True) -> dict[str, str]:

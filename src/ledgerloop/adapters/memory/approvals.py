@@ -17,12 +17,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 from ledgerloop.core.enums import ApprovalState, PolicyEffect
 from ledgerloop.core.errors import ConfigurationError, PolicyViolationError, StateTransitionError
 from ledgerloop.core.ids import ApprovalId, TenantId
 from ledgerloop.core.models import Action, ApprovalRequest, PolicyDecision, Run
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

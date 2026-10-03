@@ -12,14 +12,18 @@ only correct response is to ask the provider. Retrying is how you pay twice.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from dataclasses import replace
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 from ledgerloop.core.enums import IdempotencyState
 from ledgerloop.core.errors import IdempotencyConflictError, StateTransitionError
-from ledgerloop.core.ids import ActionId, IdempotencyKey, RunId, TenantId
 from ledgerloop.core.models import ActionReceipt, IdempotencyRecord
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+    from datetime import datetime
+
+    from ledgerloop.core.ids import ActionId, IdempotencyKey, RunId, TenantId
 
 __all__ = ["InMemoryIdempotencyStore"]
 

@@ -3,7 +3,6 @@
 import pytest
 
 from ledgerloop.tools.base import BaseTool, ToolResult
-from ledgerloop.tools.registry import ToolRegistry
 
 
 class EchoTool(BaseTool):

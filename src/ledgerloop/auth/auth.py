@@ -6,9 +6,10 @@ import hashlib
 import secrets
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ledgerloop.auth.permissions import Permission
+if TYPE_CHECKING:
+    from ledgerloop.auth.permissions import Permission
 
 
 @dataclass

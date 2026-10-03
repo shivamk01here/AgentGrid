@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from ledgerloop.cache.entry import CacheEntry
+if TYPE_CHECKING:
+    from ledgerloop.cache.entry import CacheEntry
 
 
 @runtime_checkable

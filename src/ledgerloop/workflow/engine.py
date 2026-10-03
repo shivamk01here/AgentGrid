@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ledgerloop.workflow.step import Step, StepResult
+if TYPE_CHECKING:
+    from ledgerloop.workflow.step import Step, StepResult
 
 logger = logging.getLogger(__name__)
 

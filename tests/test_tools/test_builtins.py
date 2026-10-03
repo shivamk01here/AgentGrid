@@ -313,7 +313,6 @@ class TestJsonPathTool:
         assert result.success is False
         assert "Invalid JSON" in result.error
 
-import io
 from unittest.mock import AsyncMock, MagicMock, patch
 
 

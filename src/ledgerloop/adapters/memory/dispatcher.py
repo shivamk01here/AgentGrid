@@ -8,11 +8,14 @@ where the request left the process and nobody knows what happened to it.
 
 from __future__ import annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 from ledgerloop.core.enums import ActionKind, FailureClass, IdempotencyState
 from ledgerloop.core.errors import IndeterminateError, ProviderError
 from ledgerloop.core.models import Action, ActionReceipt
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 __all__ = ["RecordingDispatcher"]
 

@@ -16,32 +16,34 @@ Two conventions hold throughout:
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
-from datetime import datetime
-from types import TracebackType
-from typing import Any, Protocol, Self, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, Self, runtime_checkable
 
-from ledgerloop.core.enums import LedgerEventType, RunState
-from ledgerloop.core.ids import (
-    ActionId,
-    ApprovalId,
-    CorrelationId,
-    IdempotencyKey,
-    RunId,
-    StepId,
-    TenantId,
-)
-from ledgerloop.core.models import (
-    Action,
-    ActionReceipt,
-    ApprovalRequest,
-    IdempotencyRecord,
-    LedgerEntry,
-    PolicyDecision,
-    Run,
-    RunSpec,
-    Step,
-)
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Sequence
+    from datetime import datetime
+    from types import TracebackType
+
+    from ledgerloop.core.enums import LedgerEventType, RunState
+    from ledgerloop.core.ids import (
+        ActionId,
+        ApprovalId,
+        CorrelationId,
+        IdempotencyKey,
+        RunId,
+        StepId,
+        TenantId,
+    )
+    from ledgerloop.core.models import (
+        Action,
+        ActionReceipt,
+        ApprovalRequest,
+        IdempotencyRecord,
+        LedgerEntry,
+        PolicyDecision,
+        Run,
+        RunSpec,
+        Step,
+    )
 
 __all__ = [
     "ActionDispatcher",

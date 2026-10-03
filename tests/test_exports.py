@@ -47,6 +47,25 @@ class TestTopLevelExports:
         assert hasattr(ledgerloop, "Permission")
         assert hasattr(ledgerloop, "PermissionLevel")
 
+    def test_the_pieces_every_example_is_built_from_are_in_all(self):
+        # Importable by name was never the problem; `__all__` is what
+        # `import *`, documentation tools, and linters read, and these were
+        # imported at the top of the package and then left out of it.
+        for name in [
+            "ManualClock",
+            "SystemClock",
+            "ApproverDirectory",
+            "InMemoryApprovalGateway",
+            "InMemoryIdempotencyStore",
+            "InMemoryLedgerStore",
+            "InMemoryRunStore",
+            "InMemoryStepStore",
+            "PolicyRule",
+            "ThresholdPolicy",
+            "ThresholdPolicyEngine",
+        ]:
+            assert name in ledgerloop.__all__, name
+
     def test_all_matches_exports(self):
         for name in ledgerloop.__all__:
             assert hasattr(ledgerloop, name), f"missing export: {name}"

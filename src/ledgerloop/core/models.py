@@ -15,8 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field, replace
-from datetime import datetime
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from ledgerloop.core.enums import (
     ActionKind,
@@ -31,17 +30,21 @@ from ledgerloop.core.enums import (
     StopReason,
 )
 from ledgerloop.core.errors import LedgerIntegrityError, StateTransitionError
-from ledgerloop.core.ids import (
-    ActionId,
-    ApprovalId,
-    CorrelationId,
-    EntryId,
-    IdempotencyKey,
-    RunId,
-    StepId,
-    TenantId,
-)
-from ledgerloop.core.money import Money
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from ledgerloop.core.ids import (
+        ActionId,
+        ApprovalId,
+        CorrelationId,
+        EntryId,
+        IdempotencyKey,
+        RunId,
+        StepId,
+        TenantId,
+    )
+    from ledgerloop.core.money import Money
 
 __all__ = [
     "Action",

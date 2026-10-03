@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ledgerloop.cache.backend import CacheBackend
 from ledgerloop.cache.entry import CacheEntry
+
+if TYPE_CHECKING:
+    from ledgerloop.cache.backend import CacheBackend
 
 logger = logging.getLogger(__name__)
 

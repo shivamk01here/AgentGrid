@@ -2,7 +2,7 @@
 
 import pytest
 
-from ledgerloop.auth.auth import AgentIdentity, Authenticator
+from ledgerloop.auth.auth import Authenticator
 from ledgerloop.auth.permissions import Permission, PermissionLevel
 
 

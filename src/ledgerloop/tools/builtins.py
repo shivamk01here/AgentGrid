@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import time
-from collections import Counter as _Counter
 from typing import Any
 
 from ledgerloop.tools.base import BaseTool, ToolResult

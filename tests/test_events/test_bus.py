@@ -2,7 +2,7 @@
 
 import pytest
 
-from ledgerloop.events.bus import Event, EventBus
+from ledgerloop.events.bus import Event
 
 
 class TestEventBus:

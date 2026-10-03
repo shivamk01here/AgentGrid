@@ -6,7 +6,7 @@ import pytest
 
 from ledgerloop.ratelimit.bucket import TokenBucket
 from ledgerloop.ratelimit.config import RateLimitConfig
-from ledgerloop.ratelimit.limiter import RateLimiter, RateLimitResult
+from ledgerloop.ratelimit.limiter import RateLimiter
 from ledgerloop.ratelimit.middleware import RateLimitExceeded, RateLimitMiddleware
 
 # ── RateLimitConfig ──────────────────────────────────────────────

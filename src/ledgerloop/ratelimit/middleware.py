@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ledgerloop.ratelimit.config import RateLimitConfig
 from ledgerloop.ratelimit.limiter import RateLimiter
+
+if TYPE_CHECKING:
+    from ledgerloop.ratelimit.config import RateLimitConfig
 
 logger = logging.getLogger(__name__)
 

@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ledgerloop.memory.backend import MemoryBackend
 from ledgerloop.memory.store import MemoryEntry
+
+if TYPE_CHECKING:
+    from ledgerloop.memory.backend import MemoryBackend
 
 logger = logging.getLogger(__name__)
 

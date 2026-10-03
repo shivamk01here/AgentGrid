@@ -1,9 +1,7 @@
-from typing import Any
 
 import pytest
 
 from ledgerloop.llm.openai_provider import OpenAIProvider
-from ledgerloop.llm.provider import ToolCall
 
 
 class DummyMessage:
