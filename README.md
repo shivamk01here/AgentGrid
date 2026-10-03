@@ -389,6 +389,38 @@ or `lift_hold`, and starting it again is not a way round either.
 python examples/finished_run.py
 ```
 
+## A run that cannot go on
+
+Some runs end because something they needed is gone: the merchant account
+was closed, the tool the agent relies on is returning nonsense, the agent
+has used up its own retries. That is not a cancellation - nobody stopped a
+run that could have finished. It is a failure, and the chain should say so.
+
+```python
+second = await coordinator.propose(first.run, build_refund("ord_5002", "900"))
+# -> the provider refused it outright: the merchant account is closed
+
+failed = await coordinator.fail(
+    second.run, "Merchant account closed - remaining refunds cannot be issued"
+)
+# -> FAILED, stop_reason error, and run.failed is the last entry in its ledger
+```
+
+`fail` only takes a running run and writes `run.failed` with the reason and
+a stop reason, `error` unless the caller names a better one. Every other way
+the coordinator fails a run, the value ceiling and a turned-down approval,
+writes the same entry through the same code.
+
+It leaves what the run did in place. A refund that went out before the
+failure is still out there afterwards, and a failed run is terminal, so the
+compensator will not take it later. If you want it walked back, call the
+compensator instead of `fail`, while the run is still running. It ends the
+run itself, `COMPENSATED` or `FAILED`.
+
+```bash
+python examples/failed_run.py
+```
+
 ## Architecture
 
 ```
@@ -426,7 +458,7 @@ ledgerloop/
 | Agent loop + Anthropic provider | Implemented |
 | Policy engine | Implemented — ordered rules, risk classification, hard ceiling |
 | Approval gateway | Implemented — role checks, separation of duties, fingerprint binding |
-| Run coordinator — start → propose → gate → halt → resume → complete, plus cancel and operator hold | Implemented |
+| Run coordinator — start → propose → gate → halt → resume → complete or fail, plus cancel and operator hold | Implemented |
 | Action executor — exactly-once dispatch | Implemented |
 | Reconciler for in-flight claims | Implemented — reversals included, and a provider still processing is left open |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
