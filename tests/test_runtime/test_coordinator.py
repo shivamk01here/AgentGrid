@@ -252,6 +252,51 @@ class TestResume:
         assert dispatcher.dispatch_count == 0
         assert (await runs.get(tenant, run.id)).state is RunState.FAILED
 
+    async def test_a_rejected_approval_is_ledgered_as_a_run_failure(
+        self, coordinator, runs, gateway, ledger, tenant, clock
+    ):
+        run = await _running_run(runs, tenant)
+        action = _refund("50000")
+        halted = await coordinator.propose(run, action)
+        await gateway.submit(
+            tenant, halted.approval_id, approved=False, actor=APPROVER, at=clock.now()
+        )
+
+        with pytest.raises(PolicyViolationError):
+            await coordinator.resume(halted.run, action)
+
+        # A reader scanning the chain for why the run ended has to find this
+        # here, not only infer it from an approval.rejected entry next to it.
+        entries = await ledger.read(tenant, run.id)
+        failures = [e for e in entries if e.event_type is LedgerEventType.RUN_FAILED]
+        assert len(failures) == 1
+        assert failures[0].payload["reason"] == "Approval rejected"
+        assert failures[0].payload["stop_reason"] == StopReason.CANCELLED.value
+        assert failures[0].payload["approval_id"] == str(halted.approval_id)
+        # The run's own failure has to be on the record before the approval
+        # event that explains why - never the other way round.
+        assert entries.index(failures[0]) < [
+            i for i, e in enumerate(entries) if e.event_type is LedgerEventType.APPROVAL_REJECTED
+        ][0]
+        await ledger.verify_chain(tenant, run.id)
+
+    async def test_an_expired_approval_is_also_ledgered_as_a_run_failure(
+        self, coordinator, runs, gateway, ledger, tenant, clock
+    ):
+        run = await _running_run(runs, tenant)
+        action = _refund("50000")
+        halted = await coordinator.propose(run, action)
+        await clock.advance(timedelta(days=4))
+        await gateway.expire(tenant, halted.approval_id, at=clock.now())
+
+        with pytest.raises(PolicyViolationError):
+            await coordinator.resume(halted.run, action)
+
+        entries = await ledger.read(tenant, run.id)
+        failures = [e for e in entries if e.event_type is LedgerEventType.RUN_FAILED]
+        assert len(failures) == 1
+        assert failures[0].payload["stop_reason"] == StopReason.DEADLINE_EXCEEDED.value
+
     async def test_a_grant_does_not_cover_a_different_action(
         self, coordinator, runs, gateway, dispatcher, tenant, clock
     ):

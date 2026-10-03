@@ -268,12 +268,22 @@ class RunCoordinator:
                 if request.state is ApprovalState.EXPIRED
                 else StopReason.CANCELLED
             )
+            reason = f"Approval {request.state.value}"
             failed = await self._save(
-                resumed.fail(
-                    f"Approval {request.state.value}",
-                    at=self._clock.now(),
-                    stop_reason=stop_reason,
-                )
+                resumed.fail(reason, at=self._clock.now(), stop_reason=stop_reason)
+            )
+            # The run itself just reached a terminal state, and that belongs
+            # in the chain on its own account - not folded into the approval
+            # event next to it, where a reader scanning for RUN_FAILED would
+            # never find it.
+            await self._write(
+                failed,
+                LedgerEventType.RUN_FAILED,
+                {
+                    "reason": reason,
+                    "stop_reason": stop_reason.value,
+                    "approval_id": str(request.id),
+                },
             )
             await self._write(
                 failed,
