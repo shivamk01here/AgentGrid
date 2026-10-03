@@ -1,6 +1,7 @@
 """Tests for the event bus."""
 
 import pytest
+
 from ledgerloop.events.bus import Event, EventBus
 
 

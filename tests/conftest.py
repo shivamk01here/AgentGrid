@@ -3,10 +3,10 @@
 import pytest
 
 from ledgerloop.agent.base import Agent, AgentConfig
-from ledgerloop.tools.registry import ToolRegistry
-from ledgerloop.memory.engine import MemoryEngine
 from ledgerloop.events.bus import EventBus
+from ledgerloop.memory.engine import MemoryEngine
 from ledgerloop.observability.metrics import MetricsCollector
+from ledgerloop.tools.registry import ToolRegistry
 
 
 @pytest.fixture

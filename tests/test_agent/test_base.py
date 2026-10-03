@@ -1,6 +1,7 @@
 """Tests for the agent module."""
 
 import pytest
+
 from ledgerloop.agent.base import Agent, AgentConfig
 
 

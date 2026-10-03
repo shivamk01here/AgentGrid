@@ -32,6 +32,7 @@ from ledgerloop.core.ids import (
     TenantId,
 )
 from ledgerloop.core.models import (
+    _LEGAL_TRANSITIONS,
     GENESIS_HASH,
     Action,
     ApprovalRequest,
@@ -42,7 +43,6 @@ from ledgerloop.core.models import (
     RunSpec,
     Step,
     TokenSpend,
-    _LEGAL_TRANSITIONS,
 )
 from ledgerloop.core.money import Money
 

@@ -1,6 +1,7 @@
 """Tests for the memory engine."""
 
 import pytest
+
 from ledgerloop.memory.engine import MemoryEngine
 from ledgerloop.memory.store import MemoryEntry
 

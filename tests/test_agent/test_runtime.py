@@ -1,6 +1,7 @@
 """Tests for the agent runtime."""
 
 import pytest
+
 from ledgerloop.agent.base import Agent, AgentConfig
 from ledgerloop.agent.runtime import AgentRuntime
 from ledgerloop.events.bus import EventBus
@@ -115,7 +116,7 @@ class TestAgentRuntime:
     @pytest.mark.asyncio
     async def test_rate_limited_result_has_duration(self):
         agent = DummyAgent()
-        from ledgerloop.ratelimit.limiter import RateLimiter, RateLimitConfig
+        from ledgerloop.ratelimit.limiter import RateLimitConfig, RateLimiter
         cfg = RateLimitConfig(max_requests=1, window_seconds=60, burst=1)
         limiter = RateLimiter(cfg)
         runtime = AgentRuntime(agent, rate_limiter=limiter)

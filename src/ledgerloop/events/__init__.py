@@ -1,3 +1,3 @@
-from ledgerloop.events.bus import EventBus, Event
+from ledgerloop.events.bus import Event, EventBus
 
 __all__ = ["EventBus", "Event"]

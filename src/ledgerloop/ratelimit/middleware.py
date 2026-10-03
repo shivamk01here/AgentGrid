@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ledgerloop.ratelimit.limiter import RateLimiter
 from ledgerloop.ratelimit.config import RateLimitConfig
+from ledgerloop.ratelimit.limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 

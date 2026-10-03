@@ -36,7 +36,7 @@ class DateTimeTool(BaseTool):
 
     async def execute(self, **kwargs: Any) -> ToolResult:
         fmt = kwargs.get("format")
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         if fmt:
             try:
                 output = now.strftime(fmt)
@@ -157,6 +157,7 @@ class CounterTool(BaseTool):
         return dict(self._counters)
 import base64
 
+
 class Base64Tool(BaseTool):
     """Encodes or decodes text using Base64."""
 
@@ -200,6 +201,7 @@ class Base64Tool(BaseTool):
 
 import hashlib
 
+
 class HashTool(BaseTool):
     """Computes cryptographic hashes of text."""
 
@@ -240,6 +242,7 @@ class HashTool(BaseTool):
 
 import uuid
 
+
 class UUIDTool(BaseTool):
     """Generates UUIDs."""
 
@@ -263,6 +266,7 @@ class UUIDTool(BaseTool):
         return ToolResult.ok(output)
 
 import operator
+
 
 class MathTool(BaseTool):
     """Performs basic arithmetic operations."""
@@ -314,6 +318,7 @@ class MathTool(BaseTool):
 
 import re
 
+
 class RegexTool(BaseTool):
     """Matches regular expressions against text."""
 
@@ -349,6 +354,7 @@ class RegexTool(BaseTool):
         return ToolResult.ok(matches, pattern=pattern)
 
 import json
+
 
 class JsonPathTool(BaseTool):
     """Extracts values from JSON strings."""
@@ -391,8 +397,9 @@ class JsonPathTool(BaseTool):
 
         return ToolResult.ok(parsed[key])
 
-import urllib.request
 import urllib.error
+import urllib.request
+
 
 class HttpTool(BaseTool):
     """Fetches text content from URLs."""
@@ -504,6 +511,7 @@ class StringLengthTool(BaseTool):
 
 import urllib.parse
 
+
 class UrlEncodeTool(BaseTool):
     """URL encodes a string."""
 
@@ -559,6 +567,7 @@ class UrlDecodeTool(BaseTool):
         return ToolResult.ok(urllib.parse.unquote(text))
 
 import random
+
 
 class RandomIntTool(BaseTool):
     """Generates a random integer."""

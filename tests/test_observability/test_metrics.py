@@ -1,7 +1,8 @@
 """Tests for observability metrics collector."""
 
 import pytest
-from ledgerloop.observability.metrics import MetricsCollector, MetricPoint
+
+from ledgerloop.observability.metrics import MetricPoint, MetricsCollector
 
 
 class TestMetricPoint:

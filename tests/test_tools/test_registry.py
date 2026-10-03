@@ -1,6 +1,7 @@
 """Tests for the tool registry."""
 
 import pytest
+
 from ledgerloop.tools.base import BaseTool, ToolResult
 from ledgerloop.tools.registry import ToolRegistry
 

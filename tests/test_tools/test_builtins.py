@@ -1,7 +1,58 @@
 """Tests for built-in tools."""
 
 import pytest
-from ledgerloop.tools.builtins import CounterTool, DateTimeTool, TextTransformTool, Base64Tool, HashTool, UUIDTool, MathTool, RegexTool, JsonPathTool, HttpTool, SleepTool, StringLengthTool, UrlEncodeTool, UrlDecodeTool, RandomIntTool, StringSplitTool, StringReplaceTool, RandomFloatTool, StringTrimTool, DictKeysTool, DictValuesTool, StringJoinTool, StringLowerTool, StringUpperTool, ListLengthTool, ListReverseTool, ListSortTool, StringCapitalizeTool, ListUniqueTool, MathAbsTool, MathRoundTool, StringContainsTool, ListSumTool, StringStartsWithTool, StringEndsWithTool, ListMaxTool, ListMinTool, ListAverageTool, DictMergeTool, DictGetTool, ListContainsTool, TypeOfTool, StringRepeatTool, MathClampTool, StringCountOccurrencesTool, ListIndexOfTool, StringPadTool, MathPowerTool, DictSizeTool
+
+from ledgerloop.tools.builtins import (
+    Base64Tool,
+    CounterTool,
+    DateTimeTool,
+    DictGetTool,
+    DictKeysTool,
+    DictMergeTool,
+    DictSizeTool,
+    DictValuesTool,
+    HashTool,
+    HttpTool,
+    JsonPathTool,
+    ListAverageTool,
+    ListContainsTool,
+    ListIndexOfTool,
+    ListLengthTool,
+    ListMaxTool,
+    ListMinTool,
+    ListReverseTool,
+    ListSortTool,
+    ListSumTool,
+    ListUniqueTool,
+    MathAbsTool,
+    MathClampTool,
+    MathPowerTool,
+    MathRoundTool,
+    MathTool,
+    RandomFloatTool,
+    RandomIntTool,
+    RegexTool,
+    SleepTool,
+    StringCapitalizeTool,
+    StringContainsTool,
+    StringCountOccurrencesTool,
+    StringEndsWithTool,
+    StringJoinTool,
+    StringLengthTool,
+    StringLowerTool,
+    StringPadTool,
+    StringRepeatTool,
+    StringReplaceTool,
+    StringSplitTool,
+    StringStartsWithTool,
+    StringTrimTool,
+    StringUpperTool,
+    TextTransformTool,
+    TypeOfTool,
+    UrlDecodeTool,
+    UrlEncodeTool,
+    UUIDTool,
+)
 
 
 class TestDateTimeTool:
@@ -263,7 +314,8 @@ class TestJsonPathTool:
         assert "Invalid JSON" in result.error
 
 import io
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 
 class TestHttpTool:
     @pytest.mark.asyncio

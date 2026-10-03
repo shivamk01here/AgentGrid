@@ -2,8 +2,10 @@
 
 import asyncio
 import time
+
 import pytest
-from ledgerloop.scheduler.scheduler import Scheduler, ScheduledTask
+
+from ledgerloop.scheduler.scheduler import ScheduledTask, Scheduler
 
 
 async def noop_task():

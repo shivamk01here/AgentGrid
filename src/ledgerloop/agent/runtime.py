@@ -141,7 +141,7 @@ class AgentRuntime:
                     self.max_retries,
                     last_error,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Timed out after {self.timeout_seconds}s"
                 logger.warning(
                     "Runtime attempt %d/%d timed out after %ss",

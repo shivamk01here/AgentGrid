@@ -9,7 +9,6 @@ from ledgerloop.ratelimit.config import RateLimitConfig
 from ledgerloop.ratelimit.limiter import RateLimiter, RateLimitResult
 from ledgerloop.ratelimit.middleware import RateLimitExceeded, RateLimitMiddleware
 
-
 # ── RateLimitConfig ──────────────────────────────────────────────
 
 
