@@ -40,8 +40,11 @@ from ledgerloop.ratelimit import (
 )
 from ledgerloop.runtime import (
     ActionExecutor,
+    ActionOutcome,
+    ActionRecord,
     ActionResult,
     AppliedEffect,
+    Auditor,
     CompensationReport,
     Compensator,
     ExecutionOutcome,
@@ -50,6 +53,7 @@ from ledgerloop.runtime import (
     ReaperReport,
     Reconciler,
     ReconciliationReport,
+    RunAudit,
     RunCoordinator,
     replay_effects,
 )
@@ -119,6 +123,10 @@ __all__ = [
     "ThresholdPolicy",
     "ThresholdPolicyEngine",
     "ActionExecutor",
+    "ActionOutcome",
+    "ActionRecord",
+    "Auditor",
+    "RunAudit",
     "ActionResult",
     "AppliedEffect",
     "CompensationReport",

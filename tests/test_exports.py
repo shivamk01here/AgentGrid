@@ -28,6 +28,10 @@ class TestTopLevelExports:
             "CompensationReport",
             "AppliedEffect",
             "replay_effects",
+            "Auditor",
+            "RunAudit",
+            "ActionRecord",
+            "ActionOutcome",
         ]:
             assert hasattr(ledgerloop, name)
 
