@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["AppliedEffect", "exposure", "replay_effects"]
+__all__ = ["AppliedEffect", "exposure", "replay_effects", "value_by_currency"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +174,27 @@ def exposure(effects: Sequence[AppliedEffect], currency: Currency) -> Money | No
             return None
         total = total + abs(effect.amount)
     return total
+
+
+def value_by_currency(effects: Sequence[AppliedEffect]) -> dict[str, int]:
+    """What these effects moved, in minor units per ISO currency code.
+
+    The figure for a finished run: added up from what its ledger shows
+    standing, never read off `Run.value_moved`. That field only advances when
+    a dispatch comes straight back with a success, so an effect that timed
+    out and was confirmed later by the reconciler is in the chain and missing
+    from the field. Kinds that move no value - a hold blocks funds, it does
+    not move them - are left out, and so is anything that lost its amount.
+    Per currency because a run may move more than one, and there is no
+    honest single figure when it does.
+    """
+    totals: dict[str, int] = {}
+    for effect in effects:
+        if not effect.kind.moves_value or effect.amount is None:
+            continue
+        code = effect.amount.currency.value
+        totals[code] = totals.get(code, 0) + abs(effect.amount).minor_units
+    return totals
 
 
 def _from_dispatch(entry: LedgerEntry, action_id: str) -> AppliedEffect | None:

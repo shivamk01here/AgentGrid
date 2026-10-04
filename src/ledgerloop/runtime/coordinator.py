@@ -57,10 +57,9 @@ from ledgerloop.core.errors import (
     StateTransitionError,
 )
 from ledgerloop.core.models import Action, PolicyDecision, Run
-from ledgerloop.runtime.effects import exposure, replay_effects
+from ledgerloop.runtime.effects import exposure, replay_effects, value_by_currency
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from datetime import datetime
 
     from ledgerloop.core.ids import ApprovalId
@@ -71,7 +70,6 @@ if TYPE_CHECKING:
         PolicyEngine,
         RunStore,
     )
-    from ledgerloop.runtime.effects import AppliedEffect
     from ledgerloop.runtime.executor import ActionExecutor, ExecutionOutcome
 
 logger = logging.getLogger(__name__)
@@ -360,7 +358,7 @@ class RunCoordinator:
                 "summary": summary,
                 "stop_reason": StopReason.COMPLETED.value,
                 "effects_standing": len(standing),
-                "value_moved": _value_moved(standing),
+                "value_moved": value_by_currency(standing),
             },
         )
         logger.info("Run %s completed", run.id)
@@ -684,25 +682,6 @@ _CLOSED_APPROVAL_EVENTS: dict[ApprovalState, LedgerEventType] = {
 """The entry a resume writes for each way a request can close without a
 grant. Spelled out per state rather than as an either/or, so a state is
 never ledgered under another one's name."""
-
-
-def _value_moved(standing: Sequence[AppliedEffect]) -> dict[str, int]:
-    """What a finished run moved, in minor units per currency.
-
-    Added up from the effects its ledger shows standing rather than read off
-    `Run.value_moved`. That field is only advanced when a dispatch comes
-    straight back with a success, so an effect that timed out and was later
-    confirmed by the reconciler is in the chain and missing from the field -
-    and the closing entry is the last place that should be a figure for what
-    we happened to hear about first time.
-    """
-    totals: dict[str, int] = {}
-    for effect in standing:
-        if not effect.kind.moves_value or effect.amount is None:
-            continue
-        code = effect.amount.currency.value
-        totals[code] = totals.get(code, 0) + abs(effect.amount).minor_units
-    return totals
 
 
 def _summarize(action: Action) -> dict[str, object]:
