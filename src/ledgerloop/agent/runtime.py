@@ -12,6 +12,7 @@ from ledgerloop.llm.provider import LLMError
 
 if TYPE_CHECKING:
     from ledgerloop.agent.base import Agent
+    from ledgerloop.core.ports import Clock
     from ledgerloop.ratelimit.limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -23,10 +24,15 @@ class AgentRuntime:
     Handles:
     - Initialization and teardown
     - Iteration control
-    - Error handling and retries
+    - Error handling and retries, backing off between attempts
     - Event emission (when an EventBus is attached to the agent)
     - Optional per-agent rate limiting
     - Logging
+
+    A retry waits before it goes: `retry_backoff_seconds` after the first
+    failure, doubling each time. The errors worth retrying are rate limits
+    and transport faults, and an attempt made the instant after one of those
+    meets the same limit or the same dead connection.
     """
 
     def __init__(
@@ -37,11 +43,17 @@ class AgentRuntime:
         timeout_seconds: float | None = None,
         rate_limiter: RateLimiter | None = None,
         rate_limit_key: str | None = None,
+        retry_backoff_seconds: float = 1.0,
+        clock: Clock | None = None,
     ) -> None:
         self.agent = agent
         if max_retries < 1:
             raise ValueError("max_retries must be at least 1")
+        if retry_backoff_seconds < 0:
+            raise ValueError("retry_backoff_seconds cannot be negative")
         self.max_retries = max_retries
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self._clock = clock
         self.timeout_seconds = timeout_seconds
         self._rate_limiter = rate_limiter
         self._rate_limit_key = rate_limit_key or agent.id
@@ -158,6 +170,11 @@ class AgentRuntime:
                     last_error,
                 )
 
+            # Only reached when another attempt follows: success returns and
+            # an unretryable error breaks out above.
+            if attempt < self.max_retries:
+                await self._back_off(attempt)
+
         duration = time.monotonic() - attempt_start
         await self._emit("agent.run.failed", {
             "error": last_error,
@@ -171,6 +188,16 @@ class AgentRuntime:
             "error": last_error,
             "attempt": attempt,
         }
+
+    async def _back_off(self, attempt: int) -> None:
+        """Wait before attempt `attempt + 1`, doubling from the configured base."""
+        delay = self.retry_backoff_seconds * 2 ** (attempt - 1)
+        if delay <= 0:
+            return
+        if self._clock is not None:
+            await self._clock.sleep(delay)
+        else:
+            await asyncio.sleep(delay)
 
     def reset(self) -> None:
         """Reset runtime state for a new execution."""

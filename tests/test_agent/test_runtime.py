@@ -1,15 +1,31 @@
 """Tests for the agent runtime."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from ledgerloop.agent.base import Agent, AgentConfig
 from ledgerloop.agent.runtime import AgentRuntime
 from ledgerloop.events.bus import EventBus
+from ledgerloop.llm.provider import LLMError
 
 
 class DummyAgent(Agent):
     async def run(self, input_data: str = "") -> str:
         return f"echo: {input_data}"
+
+
+class RecordingClock:
+    """Records every wait the runtime asks for, and waits for none of them."""
+
+    def __init__(self) -> None:
+        self.slept: list[float] = []
+
+    def now(self) -> datetime:
+        return datetime(2026, 5, 1, tzinfo=UTC)
+
+    async def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
 
 
 class FailingAgent(Agent):
@@ -37,7 +53,7 @@ class TestAgentRuntime:
     @pytest.mark.asyncio
     async def test_retry_on_failure(self):
         agent = FailingAgent()
-        runtime = AgentRuntime(agent, max_retries=3)
+        runtime = AgentRuntime(agent, max_retries=3, clock=RecordingClock())
         result = await runtime.execute("test")
         assert result["success"] is True
         assert result["output"] == "recovered"
@@ -50,7 +66,7 @@ class TestAgentRuntime:
                 raise RuntimeError("always fails")
 
         agent = AlwaysFail()
-        runtime = AgentRuntime(agent, max_retries=2)
+        runtime = AgentRuntime(agent, max_retries=2, clock=RecordingClock())
         result = await runtime.execute("test")
         assert result["success"] is False
         assert "always fails" in result["error"]
@@ -71,7 +87,7 @@ class TestAgentRuntime:
     @pytest.mark.asyncio
     async def test_iterations_are_per_execution(self):
         agent = DummyAgent()
-        runtime = AgentRuntime(agent, max_retries=3)
+        runtime = AgentRuntime(agent, max_retries=3, clock=RecordingClock())
         await runtime.execute("hello")
         assert runtime._iteration == 1
         await runtime.execute("hello again")
@@ -98,7 +114,7 @@ class TestAgentRuntime:
         agent = AlwaysFail()
         bus = EventBus()
         agent.attach_event_bus(bus)
-        runtime = AgentRuntime(agent, max_retries=2)
+        runtime = AgentRuntime(agent, max_retries=2, clock=RecordingClock())
         await runtime.execute("test")
         history = bus.get_history()
         topics = [e.topic for e in history]
@@ -126,6 +142,70 @@ class TestAgentRuntime:
         assert result["success"] is False
         assert "duration" in result
         assert result["duration"] == 0
+
+
+class TestBackoff:
+    """A retry made the instant after a rate limit meets the same rate limit."""
+
+    async def test_retries_wait_and_the_wait_doubles(self):
+        clock = RecordingClock()
+        runtime = AgentRuntime(FailingAgent(), max_retries=3, clock=clock)
+
+        result = await runtime.execute("test")
+
+        assert result["success"] is True
+        assert clock.slept == [1.0, 2.0]
+
+    async def test_there_is_no_wait_after_the_last_attempt(self):
+        class AlwaysFail(Agent):
+            async def run(self, input_data: str = "") -> str:
+                raise LLMError("rate limited", retryable=True)
+
+        clock = RecordingClock()
+        runtime = AgentRuntime(AlwaysFail(), max_retries=3, clock=clock)
+
+        result = await runtime.execute("test")
+
+        assert result["success"] is False
+        assert clock.slept == [1.0, 2.0]
+
+    async def test_an_unretryable_error_is_not_waited_on(self):
+        class BadRequest(Agent):
+            async def run(self, input_data: str = "") -> str:
+                raise LLMError("malformed request", retryable=False)
+
+        clock = RecordingClock()
+        runtime = AgentRuntime(BadRequest(), max_retries=3, clock=clock)
+
+        result = await runtime.execute("test")
+
+        assert result["attempt"] == 1
+        assert clock.slept == []
+
+    async def test_the_base_is_configurable(self):
+        clock = RecordingClock()
+        runtime = AgentRuntime(
+            FailingAgent(), max_retries=3, retry_backoff_seconds=0.25, clock=clock
+        )
+
+        await runtime.execute("test")
+
+        assert clock.slept == [0.25, 0.5]
+
+    async def test_a_zero_base_turns_the_wait_off(self):
+        clock = RecordingClock()
+        runtime = AgentRuntime(
+            FailingAgent(), max_retries=3, retry_backoff_seconds=0, clock=clock
+        )
+
+        result = await runtime.execute("test")
+
+        assert result["success"] is True
+        assert clock.slept == []
+
+    def test_a_negative_base_is_refused(self):
+        with pytest.raises(ValueError, match="retry_backoff_seconds"):
+            AgentRuntime(DummyAgent(), retry_backoff_seconds=-1)
 
 
 class TestRuntimeConfig:
