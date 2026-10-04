@@ -425,6 +425,63 @@ run itself, `COMPENSATED` or `FAILED`.
 python examples/failed_run.py
 ```
 
+## Why did that money move?
+
+The question this whole project exists to answer. The answer is in the run's
+hash-chained ledger, but as a chain of JSON payloads, with one action's story
+spread across six or seven entries. The auditor verifies the chain and reads
+it back as one record per action.
+
+```python
+audit = await Auditor(ledger=ledger).report(tenant, run.id)
+print(audit.render())
+```
+
+```
+Run run_269c5f3df8a81cb427a0f0aee366c56e
+  objective   Clear this morning's duplicate-charge queue
+  ledger      18 entries, hash chain verified
+  opened      2026-05-01 09:00:00 UTC
+  closed      2026-05-01 10:00:00 UTC  run.completed - Queue cleared
+  moved       85200.00 INR
+  in doubt    nothing
+
+  1. refund 1200.00 INR to mer_9f21c - settled (ref rec_1)
+     Duplicate charge on order ord_1001
+     policy: allow by allow-small-refund - Small refund below the review threshold
+
+  2. refund 84000.00 INR to mer_9f21c - settled (ref rec_2)
+     Duplicate charge on order ord_2002
+     policy: require_approval by ceiling - 84000.00 INR is at or above the auto-approval ceiling of 25000.00 INR
+     approved by priya@example.com (apr_d95105d96f7196ce2eba4987535ec753)
+
+  3. payout 500.00 INR to acc_77 - denied
+     Payout to a newly added bank account
+     policy: deny by deny-payout - Payouts are not eligible for agent execution
+
+  4. refund 900.00 INR to mer_9f21c - failed
+     Duplicate charge on order ord_3003
+     policy: allow by allow-small-refund - Small refund below the review threshold
+     Simulated invalid_request failure (provider='recording')
+```
+
+The chain is verified before it is read. If anyone has edited an entry, there
+is no report at all, not even a partial one. A report built from a tampered
+ledger would be a well-formatted lie.
+
+Every action ends in one of a fixed set of outcomes: settled, denied, stopped
+at the ceiling, not approved, in doubt, failed, replayed or reversed. An
+action still in doubt is reported as in doubt, never resolved to make the
+report tidier. The total counts what is still standing, so the refund the
+provider declined is not in it.
+
+The report is also data: `audit.actions` is a tuple of typed records, ready
+for a dashboard or an export.
+
+```bash
+python examples/audited_run.py
+```
+
 ## Architecture
 
 ```
@@ -436,7 +493,7 @@ ledgerloop/
 │   ├── models.py       Frozen entities with validated transitions
 │   ├── errors.py       Failure hierarchy carrying retry semantics
 │   └── ports.py        Async protocols for every external dependency
-├── runtime/        Coordinator, executor, reconciler, compensator, reaper
+├── runtime/        Coordinator, executor, reconciler, compensator, reaper, auditor
 ├── adapters/       Concrete ports: clocks, in-memory stores, approval gateway
 ├── policy/         Risk classification and approval rules
 ├── agent/          The loop: config, execution, retries, lifecycle
@@ -467,6 +524,7 @@ ledgerloop/
 | Reconciler for in-flight claims | Implemented — reversals included, and a provider still processing is left open |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
 | Reaper — expiry of halted runs | Implemented — deadline-driven, retires the request behind it |
+| Auditor — a run's ledger read back as what it did | Implemented — verifies the chain first, one record per action |
 | Run value ceiling | Implemented — checked before dispatch and approval, counts unanswered effects |
 | Idempotency, ledger, run, step stores | Implemented **in memory only** |
 | Unit of work — a run's state and its ledger entries commit together | Implemented **in memory only** |
