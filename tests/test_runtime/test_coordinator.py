@@ -304,6 +304,25 @@ class TestResume:
         assert len(failures) == 1
         assert failures[0].payload["stop_reason"] == StopReason.DEADLINE_EXCEEDED.value
 
+    async def test_a_withdrawn_approval_is_ledgered_as_withdrawn(
+        self, coordinator, runs, gateway, ledger, tenant, clock
+    ):
+        # Withdrawn directly through the gateway - a request raised in error -
+        # while the run is still waiting on it. No deadline passed, so the
+        # chain must not say one did.
+        run = await _running_run(runs, tenant)
+        action = _refund("50000")
+        halted = await coordinator.propose(run, action)
+        await gateway.withdraw(tenant, halted.approval_id, at=clock.now())
+
+        with pytest.raises(PolicyViolationError):
+            await coordinator.resume(halted.run, action)
+
+        events = [e.event_type for e in await ledger.read(tenant, run.id)]
+        assert LedgerEventType.APPROVAL_WITHDRAWN in events
+        assert LedgerEventType.APPROVAL_EXPIRED not in events
+        assert (await runs.get(tenant, run.id)).state is RunState.FAILED
+
     async def test_a_grant_does_not_cover_a_different_action(
         self, coordinator, runs, gateway, dispatcher, tenant, clock
     ):

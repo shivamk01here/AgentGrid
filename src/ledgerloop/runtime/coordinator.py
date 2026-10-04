@@ -280,9 +280,7 @@ class RunCoordinator:
             )
             await self._write(
                 failed,
-                LedgerEventType.APPROVAL_REJECTED
-                if request.state is ApprovalState.REJECTED
-                else LedgerEventType.APPROVAL_EXPIRED,
+                _CLOSED_APPROVAL_EVENTS[request.state],
                 {"approval_id": str(request.id), "state": request.state.value},
             )
             raise PolicyViolationError(f"Approval was {request.state.value}")
@@ -676,6 +674,16 @@ class RunCoordinator:
             )
         except Exception:
             logger.exception("Ledger write failed for %s on run %s", event.value, run.id)
+
+
+_CLOSED_APPROVAL_EVENTS: dict[ApprovalState, LedgerEventType] = {
+    ApprovalState.REJECTED: LedgerEventType.APPROVAL_REJECTED,
+    ApprovalState.EXPIRED: LedgerEventType.APPROVAL_EXPIRED,
+    ApprovalState.WITHDRAWN: LedgerEventType.APPROVAL_WITHDRAWN,
+}
+"""The entry a resume writes for each way a request can close without a
+grant. Spelled out per state rather than as an either/or, so a state is
+never ledgered under another one's name."""
 
 
 def _value_moved(standing: Sequence[AppliedEffect]) -> dict[str, int]:
