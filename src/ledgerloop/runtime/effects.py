@@ -106,7 +106,9 @@ def replay_effects(entries: Sequence[LedgerEntry]) -> tuple[AppliedEffect, ...]:
 
     Returns:
         Every effect this run dispatched that has not since been reversed or
-        settled as failed, in the order they were applied.
+        settled as failed, in the order they were applied. Read-only kinds
+        are never among them: a lookup or an internal note leaves nothing in
+        the world to stand, to reverse, or to be in doubt about.
     """
     standing: dict[str, AppliedEffect] = {}
 
@@ -117,7 +119,7 @@ def replay_effects(entries: Sequence[LedgerEntry]) -> tuple[AppliedEffect, ...]:
 
         if entry.event_type is LedgerEventType.ACTION_DISPATCHED:
             effect = _from_dispatch(entry, action_id)
-            if effect is not None:
+            if effect is not None and not effect.kind.is_read_only:
                 standing[action_id] = effect
 
         elif entry.event_type is LedgerEventType.ACTION_SETTLED:

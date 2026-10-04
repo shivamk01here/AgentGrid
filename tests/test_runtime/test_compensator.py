@@ -429,6 +429,27 @@ class TestThingsItRefusesToDo:
         assert record.state is IdempotencyState.FAILED
 
 
+    async def test_a_lookup_does_not_make_a_rollback_incomplete(
+        self, compensator, executor, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(
+            executor,
+            run,
+            Action(id=ActionId.generate(), kind=ActionKind.READ, description="Look up order"),
+        )
+        await apply(executor, run, capture("ord_1"))
+
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        # One capture to undo, and it was undone. The read changed nothing
+        # and is nobody's to remediate.
+        assert report.standing == 1
+        assert report.irreversible == 0
+        assert report.complete
+        assert (await runs.get(tenant, run.id)).state is RunState.COMPENSATED
+
+
 class TestPartialRollback:
     async def test_a_run_that_could_not_be_fully_rolled_back_fails(
         self, compensator, executor, runs, tenant, clock

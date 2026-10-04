@@ -176,6 +176,59 @@ class TestEffectsThatDoNotStand:
         assert replay_effects(await ledger.read(tenant, run_id)) == ()
 
 
+class TestReadOnlyActions:
+    """A lookup or an internal note is ledgered, but it is not an effect."""
+
+    async def test_a_settled_read_does_not_stand(self, ledger, run_id, tenant):
+        action_id = ActionId.generate()
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_DISPATCHED,
+            dispatch_payload(action_id, kind=ActionKind.READ, minor=None, currency=None),
+        )
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_SETTLED,
+            {"action_id": str(action_id), "provider_reference": None},
+        )
+
+        assert replay_effects(await ledger.read(tenant, run_id)) == ()
+
+    async def test_a_read_that_never_came_back_is_not_in_doubt(self, ledger, run_id, tenant):
+        # A read takes no claim, so nothing could ever reconcile it. Left
+        # standing as indeterminate it would block completion for good.
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_DISPATCHED,
+            dispatch_payload(ActionId.generate(), kind=ActionKind.READ, minor=None, currency=None),
+        )
+
+        assert replay_effects(await ledger.read(tenant, run_id)) == ()
+
+    async def test_an_annotation_does_not_stand(self, ledger, run_id, tenant):
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_DISPATCHED,
+            dispatch_payload(
+                ActionId.generate(), kind=ActionKind.ANNOTATE, minor=None, currency=None
+            ),
+        )
+
+        assert replay_effects(await ledger.read(tenant, run_id)) == ()
+
+    async def test_a_notification_still_stands(self, ledger, run_id, tenant):
+        # Moves no value, but it went out and cannot be taken back - that is
+        # exactly what a rollback has to report, not skip.
+        action_id = ActionId.generate()
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_DISPATCHED,
+            dispatch_payload(action_id, kind=ActionKind.NOTIFY, minor=None, currency=None),
+        )
+        await write(
+            ledger, run_id, tenant, LedgerEventType.ACTION_SETTLED,
+            {"action_id": str(action_id), "provider_reference": "msg_1"},
+        )
+
+        (effect,) = replay_effects(await ledger.read(tenant, run_id))
+        assert effect.kind is ActionKind.NOTIFY
+
+
 class TestIndeterminateEffects:
     async def test_an_indeterminate_effect_stands_but_is_flagged(
         self, ledger, run_id, tenant
