@@ -21,6 +21,7 @@ from ledgerloop.core.enums import (
     Currency,
     FailureClass,
     IdempotencyState,
+    LedgerEventType,
     RunState,
 )
 from ledgerloop.core.errors import LedgerIntegrityError, ProviderError, StateTransitionError
@@ -130,6 +131,22 @@ class TestRollingBack:
         await compensator.compensate(await runs.get(tenant, run.id))
 
         assert (await runs.get(tenant, run.id)).state is RunState.COMPENSATED
+
+    async def test_a_clean_rollback_closes_the_chain(
+        self, compensator, executor, runs, ledger, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        # Without this the chain ends on the last reversal, which looks the
+        # same as a rollback whose worker died halfway through.
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.event_type is LedgerEventType.RUN_COMPENSATED
+        assert entry.payload["standing"] == 1
+        assert entry.payload["compensated"] == 1
+        await ledger.verify_chain(tenant, run.id)
 
     async def test_effects_are_reversed_newest_first(
         self, compensator, executor, runs, dispatcher, tenant, clock
@@ -421,8 +438,12 @@ class TestThingsItRefusesToDo:
         await compensator.compensate(await runs.get(tenant, run.id))
 
         entries = await ledger.read(tenant, run.id)
-        assert entries[-1].event_type.value == "action.failed"
-        assert entries[-1].payload["detail"] == "Reversal window has closed"
+        (refusal,) = [
+            e
+            for e in entries
+            if e.event_type is LedgerEventType.ACTION_FAILED and e.payload.get("compensation")
+        ]
+        assert refusal.payload["detail"] == "Reversal window has closed"
         assert len(replay_effects(entries)) == 1
         # The claim agrees with the chain: settled, as a failure.
         record = await idempotency.get(reversal_key(effect), tenant)
@@ -467,6 +488,22 @@ class TestPartialRollback:
         stored = await runs.get(tenant, run.id)
         assert stored.state is RunState.FAILED
         assert "still applied" in (stored.failure_reason or "")
+
+    async def test_an_incomplete_rollback_is_ledgered_as_a_run_failure(
+        self, compensator, executor, runs, ledger, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        await apply(executor, run, payout("ord_9"))
+
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        entry = (await ledger.read(tenant, run.id))[-1]
+        assert entry.event_type is LedgerEventType.RUN_FAILED
+        assert "still applied" in entry.payload["reason"]
+        assert entry.payload["irreversible"] == 1
+        assert entry.payload["compensated"] == 1
+        await ledger.verify_chain(tenant, run.id)
 
     async def test_the_reversible_ones_are_still_reversed(
         self, compensator, executor, runs, dispatcher, tenant, clock

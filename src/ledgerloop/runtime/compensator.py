@@ -39,7 +39,7 @@ import logging
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from ledgerloop.core.enums import IdempotencyState, LedgerEventType, RunState
+from ledgerloop.core.enums import IdempotencyState, LedgerEventType, RunState, StopReason
 from ledgerloop.core.errors import LedgerloopError, StateTransitionError
 from ledgerloop.core.ids import IdempotencyKey
 from ledgerloop.runtime.effects import replay_effects
@@ -298,18 +298,40 @@ class Compensator:
         """Land the run in its final state and say what happened."""
         now = self._clock.now()
         if report.complete:
-            await self._save(run.complete_compensation(at=now))
+            compensated = await self._save(run.complete_compensation(at=now))
+            await self._write_run(
+                compensated, LedgerEventType.RUN_COMPENSATED, _report_payload(report)
+            )
             logger.info("Run %s rolled back cleanly: %s", run.id, report)
             return report
 
-        await self._save(
-            run.fail(
-                f"Rollback incomplete - {report.stranded} effect(s) still applied",
-                at=now,
-            )
+        reason = f"Rollback incomplete - {report.stranded} effect(s) still applied"
+        failed = await self._save(run.fail(reason, at=now))
+        # The same entry the coordinator writes when it fails a run, so a
+        # reader scanning for RUN_FAILED finds this one too - with the counts
+        # that say what is still out there.
+        await self._write_run(
+            failed,
+            LedgerEventType.RUN_FAILED,
+            {
+                "reason": reason,
+                "stop_reason": StopReason.ERROR.value,
+                **_report_payload(report),
+            },
         )
         logger.error("Run %s could not be fully rolled back: %s", run.id, report)
         return report
+
+    async def _write_run(
+        self, run: Run, event: LedgerEventType, payload: dict[str, object]
+    ) -> None:
+        """Record how the rollback ended, never failing the rollback."""
+        try:
+            await self._ledger.append(
+                run.id, run.tenant_id, event, payload, occurred_at=self._clock.now()
+            )
+        except Exception:
+            logger.exception("Ledger write failed for %s on run %s", event.value, run.id)
 
     async def _save(self, run: Run) -> Run:
         """Persist a transitioned run at its new version."""
@@ -349,6 +371,18 @@ class Compensator:
             )
         except Exception:
             logger.exception("Ledger write failed for %s on run %s", event.value, run.id)
+
+
+def _report_payload(report: CompensationReport) -> dict[str, object]:
+    """The counts a run-level rollback entry carries."""
+    return {
+        "standing": report.standing,
+        "compensated": report.compensated,
+        "replayed": report.replayed,
+        "irreversible": report.irreversible,
+        "unresolved": report.unresolved,
+        "failed": report.failed,
+    }
 
 
 def reversal_key(effect: AppliedEffect) -> IdempotencyKey:
