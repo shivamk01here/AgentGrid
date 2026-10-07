@@ -469,6 +469,51 @@ class TestLedgering:
         assert len(reconciled) == 1
         await ledger.verify_chain(tenant, run_id)
 
+    async def test_a_failure_is_ledgered_with_the_providers_reason(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        lookup = StubLookup(
+            receipt=ActionReceipt(
+                action_id=action.id,
+                state=IdempotencyState.FAILED,
+                failure_reason="issuer declined",
+            )
+        )
+        await clock.advance(timedelta(hours=1))
+
+        await _reconciler(idempotency, ledger, clock, lookup).sweep()
+
+        # The claim has the reason. A chain without it says the refund
+        # failed and leaves whoever reads it to go and ask the provider why.
+        entry = (await ledger.read(tenant, run_id))[-1]
+        assert entry.event_type is LedgerEventType.ACTION_FAILED
+        assert entry.payload["error"] == "issuer declined"
+
+    async def test_a_request_the_provider_never_saw_says_so_in_the_chain(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        await clock.advance(timedelta(hours=1))
+
+        await _reconciler(idempotency, ledger, clock, StubLookup(receipt=None)).sweep()
+
+        entry = (await ledger.read(tenant, run_id))[-1]
+        assert entry.payload["error"] == "Provider has no record of this request"
+
+    async def test_a_confirmation_carries_no_error(
+        self, idempotency, ledger, clock, tenant, run_id
+    ):
+        action = await _stranded_claim(idempotency, ledger, clock, tenant, run_id)
+        lookup = StubLookup(
+            receipt=ActionReceipt(action_id=action.id, state=IdempotencyState.SUCCEEDED)
+        )
+        await clock.advance(timedelta(hours=1))
+
+        await _reconciler(idempotency, ledger, clock, lookup).sweep()
+
+        assert "error" not in (await ledger.read(tenant, run_id))[-1].payload
+
 
 class TestConfiguration:
     def test_negative_grace_is_rejected(self, idempotency, ledger, clock):

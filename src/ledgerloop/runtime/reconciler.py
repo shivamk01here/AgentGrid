@@ -238,6 +238,11 @@ class Reconciler:
             "state": receipt.state.value,
             "provider_reference": receipt.provider_reference,
         }
+        if receipt.failure_reason:
+            # Under the key the executor writes it under, so a reader of the
+            # chain finds why a reconciled failure failed where it finds why
+            # any other one did.
+            payload["error"] = receipt.failure_reason
         if is_reversal_claim(record):
             # The claim is for undoing the action it names, not for the
             # action. Ledgered as it stands, a reversal that never landed
