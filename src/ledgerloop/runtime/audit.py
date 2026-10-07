@@ -13,6 +13,10 @@ moved. It reads the chain only after the chain verifies. A report built from
 a ledger somebody edited would be a well-formatted lie, and the reason the
 ledger is hash-chained is so that it cannot be one.
 
+The same audit comes out two ways: `render` for a person reading it, and
+`to_dict` for whatever has to store it, serve it or put it on a screen - so
+that nothing downstream ends up parsing the text back into numbers.
+
 Everything here is read-only. Nothing is settled, reconciled or reversed;
 an action still in doubt is reported as in doubt, not resolved for the
 report's convenience.
@@ -96,6 +100,25 @@ class ActionRecord:
     """The provider's error, why an approval closed, or what a failed reversal
     left behind - whatever the outcome alone does not say."""
 
+    def to_dict(self) -> dict[str, Any]:
+        """This record as JSON-ready data, money in minor units plus currency."""
+        return {
+            "action_id": self.action_id,
+            "outcome": self.outcome.value,
+            "kind": self.kind,
+            "description": self.description,
+            "amount_minor": None if self.amount is None else self.amount.minor_units,
+            "currency": None if self.amount is None else self.amount.currency.value,
+            "counterparty": self.counterparty,
+            "decision": self.decision,
+            "rule_id": self.rule_id,
+            "policy_reason": self.policy_reason,
+            "approval_id": self.approval_id,
+            "approved_by": self.approved_by,
+            "provider_reference": self.provider_reference,
+            "detail": self.detail,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class RunAudit:
@@ -150,6 +173,31 @@ class RunAudit:
             lines.append("")
             lines.extend(_render_record(number, record))
         return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        """The audit as data, for a dashboard, an API or an export file.
+
+        Everything in it survives `json.dumps` as it stands: ids as strings,
+        times in ISO 8601, money as integer minor units beside its currency,
+        never as a formatted figure somebody has to parse back. `verified`
+        is carried through as is, so a consumer can refuse an unchecked fold
+        the same way `render` warns about one.
+        """
+        return {
+            "run_id": str(self.run_id),
+            "tenant_id": str(self.tenant_id),
+            "entry_count": self.entry_count,
+            "verified": self.verified,
+            "objective": self.objective,
+            "opened_at": None if self.opened_at is None else self.opened_at.isoformat(),
+            "closed_at": None if self.closed_at is None else self.closed_at.isoformat(),
+            "closed": self.closed,
+            "closing_event": self.closing_event,
+            "closing_reason": self.closing_reason,
+            "value_moved": dict(self.value_moved),
+            "in_doubt": list(self.in_doubt),
+            "actions": [record.to_dict() for record in self.actions],
+        }
 
 
 class Auditor:
