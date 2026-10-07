@@ -24,7 +24,12 @@ from ledgerloop.core.enums import (
     LedgerEventType,
     RunState,
 )
-from ledgerloop.core.errors import LedgerIntegrityError, ProviderError, StateTransitionError
+from ledgerloop.core.errors import (
+    IndeterminateError,
+    LedgerIntegrityError,
+    ProviderError,
+    StateTransitionError,
+)
 from ledgerloop.core.ids import ActionId, ApprovalId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, ActionReceipt, RunSpec
 from ledgerloop.core.money import Money
@@ -450,6 +455,34 @@ class TestThingsItRefusesToDo:
         assert record.state is IdempotencyState.FAILED
 
 
+    async def test_a_reversal_that_times_out_is_unresolved_not_refused(
+        self, compensator, executor, runs, ledger, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        effect = replay_effects(await ledger.read(tenant, run.id))[0]
+
+        compensator = _with_dispatcher(compensator, _TimingOutDispatcher())
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        # The refund may have gone out. Reported as refused, somebody sends
+        # it again by hand.
+        assert report.unresolved == 1
+        assert report.failed == 0
+        assert not report.complete
+
+        entries = await ledger.read(tenant, run.id)
+        (doubt,) = [
+            e
+            for e in entries
+            if e.event_type is LedgerEventType.ACTION_FAILED and e.payload.get("compensation")
+        ]
+        assert doubt.payload["indeterminate"] is True
+        assert len(replay_effects(entries)) == 1
+        # Left for the reconciler, not settled either way.
+        record = await idempotency.get(reversal_key(effect), tenant)
+        assert record.state is IdempotencyState.IN_FLIGHT
+
     async def test_a_lookup_does_not_make_a_rollback_incomplete(
         self, compensator, executor, runs, tenant, clock
     ):
@@ -606,6 +639,18 @@ class _RefusingDispatcher(RecordingDispatcher):
             "Reversal window has closed",
             provider="recording",
             failure_class=FailureClass.INVALID_REQUEST,
+        )
+
+
+class _TimingOutDispatcher(RecordingDispatcher):
+    """A provider that took the reversal and never answered."""
+
+    async def compensate(self, action, receipt, *, at):
+        self.compensated.append(action)
+        raise IndeterminateError(
+            "Connection dropped after the reversal was sent",
+            idempotency_key=action.idempotency_key,
+            action_id=action.id,
         )
 
 

@@ -361,7 +361,10 @@ def _fold_failure(record: ActionRecord, payload: dict[str, Any]) -> ActionRecord
     """Fold an ACTION_FAILED entry, which means three different things."""
     error = _text(payload.get("error")) or _text(payload.get("detail"))
     if payload.get("compensation") is True:
-        # A reversal failed. The action itself still stands as it was.
+        # A reversal failed, or went out and never came back. Either way the
+        # action itself still stands as it was.
+        if payload.get("indeterminate") is True:
+            return replace(record, detail=f"reversal in doubt: {error or 'no answer'}")
         return replace(record, detail=f"reversal failed: {error or 'no reason given'}")
     if payload.get("indeterminate") is True:
         return replace(record, outcome=ActionOutcome.IN_DOUBT, detail=error)

@@ -40,7 +40,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from ledgerloop.core.enums import IdempotencyState, LedgerEventType, RunState, StopReason
-from ledgerloop.core.errors import LedgerloopError, StateTransitionError
+from ledgerloop.core.errors import IndeterminateError, LedgerloopError, StateTransitionError
 from ledgerloop.core.ids import IdempotencyKey
 from ledgerloop.runtime.effects import replay_effects
 
@@ -230,6 +230,20 @@ class Compensator:
             receipt = await self._dispatcher.compensate(
                 effect.to_action(), effect.to_receipt(), at=self._clock.now()
             )
+        except IndeterminateError as exc:
+            # The reversal left and nothing came back. It may have landed, so
+            # this is not a refusal: a human told the provider said no will go
+            # and refund by hand, and that is the second refund the claim was
+            # taken to prevent. The claim stays in flight for the reconciler.
+            logger.error(
+                "Reversal of %s has no known outcome; leaving it for reconciliation on run %s",
+                effect.action_id,
+                run.id,
+            )
+            await self._write(
+                run, effect, reversed_ok=False, detail=str(exc), indeterminate=True
+            )
+            return replace(report, unresolved=report.unresolved + 1)
         except (LedgerloopError, NotImplementedError, ValueError) as exc:
             # The claim stays as it is. An unanswered reversal is exactly as
             # dangerous as an unanswered payment, and gets the same treatment.
@@ -346,6 +360,7 @@ class Compensator:
         detail: str | None,
         reversal_kind: str | None = None,
         provider_reference: str | None = None,
+        indeterminate: bool = False,
     ) -> None:
         """Record what happened to one effect, never failing the rollback."""
         # `compensation` marks the entry as being about the reversal rather
@@ -362,6 +377,8 @@ class Compensator:
             "provider_reference": provider_reference,
             "detail": detail,
         }
+        if indeterminate:
+            payload["indeterminate"] = True
         event = (
             LedgerEventType.ACTION_COMPENSATED if reversed_ok else LedgerEventType.ACTION_FAILED
         )

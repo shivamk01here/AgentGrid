@@ -22,6 +22,7 @@ from ledgerloop.adapters.memory import (
 from ledgerloop.core.enums import ActionKind, Currency, FailureClass
 from ledgerloop.core.errors import (
     BudgetExhaustedError,
+    IndeterminateError,
     LedgerIntegrityError,
     PolicyViolationError,
 )
@@ -306,6 +307,38 @@ class TestDoubtAndReversal:
         assert audit.closing_event in {"run.compensated", "run.failed"}
 
 
+    async def test_a_reversal_nobody_heard_back_from_is_in_doubt_not_failed(
+        self, runs, ledger, dispatcher, idempotency, auditor, tenant, clock
+    ):
+        run = await runs.create(RunSpec(tenant_id=tenant, objective="Undo a capture"))
+        run = await runs.save(run.start(at=clock.now()), expected_version=0)
+        capture = Action(
+            id=ActionId.generate(),
+            kind=ActionKind.CAPTURE,
+            description="Capture on order ord_9",
+            amount=Money.from_major("2500", Currency.INR),
+            counterparty="mer_9f21c",
+            idempotency_key=IdempotencyKey.derive("capture", "ord_9"),
+        )
+        await ActionExecutor(
+            idempotency=idempotency, dispatcher=dispatcher, ledger=ledger, clock=clock
+        ).execute(capture, run_id=run.id, tenant_id=tenant)
+        await Compensator(
+            runs=runs,
+            ledger=ledger,
+            dispatcher=_TimingOutDispatcher(),
+            idempotency=idempotency,
+            clock=clock,
+        ).compensate(run)
+
+        record = _only(await auditor.report(tenant, run.id), ActionOutcome.SETTLED)
+
+        # The capture still stands, and whether its refund went out is the
+        # open question - not a provider that said no.
+        assert record.action_id == str(capture.id)
+        assert (record.detail or "").startswith("reversal in doubt")
+
+
 class TestTheRunAsAWhole:
     async def test_how_the_run_opened_and_closed(
         self, coordinator, runs, auditor, tenant, clock
@@ -377,3 +410,14 @@ class TestRendering:
         assert "moved       84000.00 INR" in text
         assert "refund 84000.00 INR to mer_9f21c - settled" in text
         assert f"approved by {APPROVER}" in text
+
+
+class _TimingOutDispatcher(RecordingDispatcher):
+    """Takes a reversal and never answers."""
+
+    async def compensate(self, action, receipt, *, at):
+        raise IndeterminateError(
+            "Connection dropped after the reversal was sent",
+            idempotency_key=action.idempotency_key,
+            action_id=action.id,
+        )
