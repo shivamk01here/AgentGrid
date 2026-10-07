@@ -7,6 +7,10 @@ turns one refund down. Then the run's ledger is verified and read back as an
 audit - every action with its amount, the rule that decided it, who approved
 it, and what the provider said - instead of as forty JSON payloads.
 
+The same audit is then printed as data, the shape a dashboard or an export
+file would take it in: money as minor units beside its currency, never a
+formatted figure.
+
     python examples/audited_run.py
 """
 
@@ -14,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 from datetime import UTC, datetime
 
 from ledgerloop import Auditor
@@ -116,6 +121,14 @@ async def main() -> None:
     # --- and the audit -------------------------------------------------------
     audit = await Auditor(ledger=ledger).report(tenant, run.id)
     print(audit.render())
+
+    # --- and the same audit as data, for whatever stores or serves it --------
+    data = audit.to_dict()
+    summary = {key: data[key] for key in ("run_id", "verified", "closing_event", "value_moved")}
+    approved = next(record for record in data["actions"] if record["approved_by"])
+    print()
+    print(json.dumps(summary, indent=2))
+    print(json.dumps(approved, indent=2))
 
 
 if __name__ == "__main__":
