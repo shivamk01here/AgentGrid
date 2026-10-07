@@ -205,6 +205,31 @@ class TestFailures:
         assert [e.event_type.value for e in replays] == ["action.failed"]
         assert replays[0].payload["state"] == "failed"
 
+    async def test_a_replayed_failure_keeps_the_first_reason(
+        self, executor, dispatcher, ledger, tenant, run_id
+    ):
+        dispatcher.fail_next(FailureClass.INVALID_REQUEST)
+        action = refund()
+        first = await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        second = await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        # "Previously failed" and nothing else sends the caller back to the
+        # provider to find out why, or has it propose the same thing again.
+        assert second.replayed
+        assert second.error == f"previously failed: {first.error}"
+        replay = (await ledger.read(tenant, run_id))[-1]
+        assert replay.payload["error"] == first.error
+
+    async def test_a_replayed_success_carries_no_error(self, executor, ledger, tenant, run_id):
+        action = refund()
+        await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        second = await executor.execute(action, run_id=run_id, tenant_id=tenant)
+
+        assert second.error is None
+        assert "error" not in (await ledger.read(tenant, run_id))[-1].payload
+
     async def test_replaying_a_success_is_still_ledgered_as_a_settlement(
         self, executor, ledger, tenant, run_id
     ):

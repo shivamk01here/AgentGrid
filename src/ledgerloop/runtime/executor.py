@@ -121,6 +121,18 @@ class ActionExecutor:
                 record.state.value,
             )
             succeeded = record.state is IdempotencyState.SUCCEEDED
+            receipt = record.receipt
+            # The first failure's reason travels with the replay. Without it
+            # the caller - and the model behind it - is told only that this
+            # failed once, and proposes it again to find out why.
+            reason = None if succeeded or receipt is None else receipt.failure_reason
+            payload: dict[str, object] = {
+                "action_id": str(action.id),
+                "replayed": True,
+                "state": record.state.value,
+            }
+            if reason:
+                payload["error"] = reason
             # The ledger says what the claim says. A replayed failure written
             # as a settlement would tell anyone reading the chain - and
             # replay_effects, which folds it - that the effect landed.
@@ -128,17 +140,15 @@ class ActionExecutor:
                 run_id,
                 tenant_id,
                 LedgerEventType.ACTION_SETTLED if succeeded else LedgerEventType.ACTION_FAILED,
-                {
-                    "action_id": str(action.id),
-                    "replayed": True,
-                    "state": record.state.value,
-                },
+                payload,
             )
-            receipt = record.receipt
+            error = None
+            if not succeeded:
+                error = f"previously failed: {reason}" if reason else "previously failed"
             return ExecutionOutcome(
                 receipt=None if receipt is None else _mark_replayed(receipt),
                 replayed=True,
-                error=None if succeeded else "previously failed",
+                error=error,
             )
 
         # 3. Held, but not by us. Another worker took this claim, or an earlier
