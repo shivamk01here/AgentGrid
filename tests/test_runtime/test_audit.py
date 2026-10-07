@@ -6,6 +6,7 @@ wrong person, a total that counts money that never moved - or a report
 printed from a ledger somebody edited.
 """
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -410,6 +411,111 @@ class TestRendering:
         assert "moved       84000.00 INR" in text
         assert "refund 84000.00 INR to mer_9f21c - settled" in text
         assert f"approved by {APPROVER}" in text
+
+
+class TestAsData:
+    async def _approved_and_completed(self, coordinator, runs, gateway, tenant, clock):
+        run = await _started(coordinator, runs, tenant)
+        action = _refund("ord_2002", "84000")
+        halted = await coordinator.propose(run, action)
+        await gateway.submit(
+            tenant, halted.approval_id, approved=True, actor=APPROVER, at=clock.now()
+        )
+        resumed = await coordinator.resume(halted.run, action)
+        await coordinator.complete(resumed.run, summary="Queue cleared")
+        return run, action
+
+    async def test_it_survives_json_as_it_stands(
+        self, coordinator, runs, gateway, auditor, tenant, clock
+    ):
+        run, _ = await self._approved_and_completed(coordinator, runs, gateway, tenant, clock)
+
+        data = (await auditor.report(tenant, run.id)).to_dict()
+
+        # No default= hook: anything that needed one would be a type a
+        # consumer in another language has no way to read.
+        assert json.loads(json.dumps(data)) == data
+
+    async def test_money_is_minor_units_beside_its_currency(
+        self, coordinator, runs, gateway, auditor, tenant, clock
+    ):
+        run, action = await self._approved_and_completed(
+            coordinator, runs, gateway, tenant, clock
+        )
+
+        data = (await auditor.report(tenant, run.id)).to_dict()
+
+        (record,) = data["actions"]
+        assert record["action_id"] == str(action.id)
+        assert record["amount_minor"] == 8_400_000
+        assert record["currency"] == "INR"
+        assert data["value_moved"] == {"INR": 8_400_000}
+
+    async def test_it_says_what_the_text_says(
+        self, coordinator, runs, gateway, auditor, tenant, clock
+    ):
+        run, _ = await self._approved_and_completed(coordinator, runs, gateway, tenant, clock)
+
+        data = (await auditor.report(tenant, run.id)).to_dict()
+
+        assert data["run_id"] == str(run.id)
+        assert data["tenant_id"] == str(tenant)
+        assert data["verified"] is True
+        assert data["closed"] is True
+        assert data["closing_event"] == "run.completed"
+        assert data["closing_reason"] == "Queue cleared"
+        assert data["opened_at"] == AT.isoformat()
+        (record,) = data["actions"]
+        assert record["outcome"] == "settled"
+        assert record["decision"] == "require_approval"
+        assert record["approved_by"] == APPROVER
+        assert record["provider_reference"] == "rec_1"
+
+    async def test_an_open_run_has_no_closing_time(self, coordinator, runs, auditor, tenant):
+        run = await _started(coordinator, runs, tenant)
+        await coordinator.propose(run, _refund("ord_2002", "84000"))
+
+        data = (await auditor.report(tenant, run.id)).to_dict()
+
+        assert data["closed"] is False
+        assert data["closed_at"] is None
+        assert data["actions"][0]["outcome"] == "awaiting approval"
+
+    async def test_an_action_with_no_amount_says_so_in_both_fields(
+        self, coordinator, runs, auditor, tenant
+    ):
+        run = await _started(coordinator, runs, tenant)
+        lookup = Action(id=ActionId.generate(), kind=ActionKind.READ, description="Look up order")
+        await coordinator.propose(run, lookup)
+
+        (record,) = (await auditor.report(tenant, run.id)).to_dict()["actions"]
+
+        # Both or neither: a currency with no figure is as useless as a
+        # figure with no currency.
+        assert record["amount_minor"] is None
+        assert record["currency"] is None
+
+    async def test_an_unverified_fold_says_so(self, coordinator, runs, ledger, tenant):
+        run = await _started(coordinator, runs, tenant)
+        await coordinator.propose(run, _refund("ord_1001", "1200"))
+
+        data = build_audit(run.id, tenant, await ledger.read(tenant, run.id)).to_dict()
+
+        assert data["verified"] is False
+
+    async def test_changing_the_data_does_not_change_the_audit(
+        self, coordinator, runs, auditor, tenant
+    ):
+        run = await _started(coordinator, runs, tenant)
+        await coordinator.propose(run, _refund("ord_1001", "1200"))
+        audit = await auditor.report(tenant, run.id)
+
+        data = audit.to_dict()
+        data["value_moved"]["INR"] = 1
+        data["in_doubt"].append("act_made_up")
+
+        assert audit.value_moved == {"INR": 120_000}
+        assert audit.in_doubt == ()
 
 
 class _TimingOutDispatcher(RecordingDispatcher):
