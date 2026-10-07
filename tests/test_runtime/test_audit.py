@@ -180,6 +180,40 @@ class TestApprovals:
         assert record.approved_by is None
         assert not audit.closed
 
+    async def test_nothing_is_awaiting_approval_on_a_run_that_has_ended(
+        self, coordinator, runs, gateway, auditor, tenant, clock
+    ):
+        run = await _started(coordinator, runs, tenant)
+        action = _refund("ord_2002", "84000")
+        halted = await coordinator.propose(run, action)
+        # The reviewer says yes, and the case is called off before any worker
+        # resumes the run. The grant is final, so the cancel has no request
+        # left to withdraw and nothing closes it in the chain.
+        await gateway.submit(
+            tenant, halted.approval_id, approved=True, actor=APPROVER, at=clock.now()
+        )
+        await coordinator.cancel(halted.run, reason="Customer withdrew the dispute")
+
+        audit = await auditor.report(tenant, run.id)
+
+        assert audit.closing_event == "run.cancelled"
+        (record,) = audit.actions
+        assert record.outcome is ActionOutcome.PROPOSED
+        assert record.detail == "the run ended (run.cancelled) before it was acted on"
+        assert record.approval_id == str(halted.approval_id)
+        assert audit.value_moved == {}
+
+    async def test_a_request_the_cancel_did_withdraw_is_still_not_approved(
+        self, coordinator, runs, auditor, tenant
+    ):
+        run = await _started(coordinator, runs, tenant)
+        halted = await coordinator.propose(run, _refund("ord_2002", "84000"))
+        await coordinator.cancel(halted.run)
+
+        record = _only(await auditor.report(tenant, run.id), ActionOutcome.NOT_APPROVED)
+
+        assert record.detail == "approval withdrawn"
+
     async def test_a_rejection_is_traced_back_to_its_action(
         self, coordinator, runs, gateway, auditor, tenant, clock
     ):

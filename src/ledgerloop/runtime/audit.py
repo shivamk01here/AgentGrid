@@ -346,6 +346,19 @@ def build_audit(
                 detail=None if reversal is None else f"reversed by a {reversal}",
             )
 
+    if closing_event is not None:
+        # Nothing waits on a run that has ended. A request is only ledgered as
+        # closed when the reaper or a cancel retires it, and neither can once
+        # a reviewer has decided - so a grant that landed before the run was
+        # called off leaves the action looking as if it were still queued.
+        for action_id, record in records.items():
+            if record.outcome is ActionOutcome.AWAITING_APPROVAL:
+                records[action_id] = replace(
+                    record,
+                    outcome=ActionOutcome.PROPOSED,
+                    detail=f"the run ended ({closing_event}) before it was acted on",
+                )
+
     standing = replay_effects(entries)
     return RunAudit(
         run_id=run_id,
