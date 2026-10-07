@@ -475,8 +475,34 @@ action still in doubt is reported as in doubt, never resolved to make the
 report tidier. The total counts what is still standing, so the refund the
 provider declined is not in it.
 
-The report is also data: `audit.actions` is a tuple of typed records, ready
-for a dashboard or an export.
+The report is also data. `audit.to_dict()` gives the same audit in a form
+`json.dumps` takes as it is, for a dashboard, an API, or an export file. Money
+comes out the way the ledger stores it, as integer minor units with the
+currency next to them, never as a formatted figure that someone has to parse
+back:
+
+```python
+record = audit.to_dict()["actions"][1]
+```
+
+```json
+{
+  "outcome": "settled",
+  "kind": "refund",
+  "amount_minor": 8400000,
+  "currency": "INR",
+  "decision": "require_approval",
+  "rule_id": "ceiling",
+  "approved_by": "priya@example.com",
+  "provider_reference": "rec_2"
+}
+```
+
+That excerpt leaves out a few fields; the full record also has the action and
+approval ids, the description, the counterparty and the policy reason. The
+`verified` flag is passed through unchanged, so whatever consumes the data can
+reject an audit whose chain was never checked. There is deliberately no way
+to turn that data back into an audit, because nothing would have verified it.
 
 ```bash
 python examples/audited_run.py
@@ -524,7 +550,7 @@ ledgerloop/
 | Reconciler for in-flight claims | Implemented — reversals included, and a provider still processing is left open |
 | Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
 | Reaper — expiry of halted runs | Implemented — deadline-driven, retires the request behind it |
-| Auditor — a run's ledger read back as what it did | Implemented — verifies the chain first, one record per action |
+| Auditor — a run's ledger read back as what it did | Implemented — verifies the chain first, one record per action, as text or as JSON-ready data |
 | Run value ceiling | Implemented — checked before dispatch and approval, counts unanswered effects |
 | Idempotency, ledger, run, step stores | Implemented **in memory only** |
 | Unit of work — a run's state and its ledger entries commit together | Implemented **in memory only** |
