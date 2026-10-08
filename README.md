@@ -205,6 +205,25 @@ rather than `COMPENSATED`: a kind with no reversal, an effect whose outcome
 was never determined, and a reversal the provider declined. Half a rollback
 is worse than either end of it, so it is reported rather than rounded up.
 
+A rollback is also one-way: the run never goes back to `RUNNING`. So you can
+ask first. `plan` reads the same chain and claims, decides the same way, and
+then claims nothing, sends nothing and leaves the run where it is:
+
+```python
+plan = await compensator.plan(run)
+# payout   9000.00 INR  irreversible
+# capture  1800.00 INR  reverse by refund
+# capture  2500.00 INR  reverse by refund
+
+plan.complete     # False - a rollback now would leave the payout standing
+plan.stranded     # the steps it would leave, each with its verdict
+```
+
+Every step gets one of six verdicts: reverse, already reversed,
+irreversible, in doubt, reversal in flight, or previously rejected (with the
+provider's reason). A plan is a reading, not a reservation, and `compensate`
+decides again from whatever it finds when it runs.
+
 ```bash
 python examples/rolled_back_batch.py
 ```
@@ -548,7 +567,7 @@ ledgerloop/
 | Run coordinator — start → propose → gate → halt → resume → complete or fail, plus cancel and operator hold | Implemented |
 | Action executor — exactly-once dispatch | Implemented |
 | Reconciler for in-flight claims | Implemented — reversals included, and a provider still processing is left open |
-| Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess |
+| Compensator — rollback of applied effects | Implemented — exactly-once reversals, refuses to guess, can plan a rollback without running it |
 | Reaper — expiry of halted runs | Implemented — deadline-driven, retires the request behind it |
 | Auditor — a run's ledger read back as what it did | Implemented — verifies the chain first, one record per action, as text or as JSON-ready data |
 | Run value ceiling | Implemented — checked before dispatch and approval, counts unanswered effects |
