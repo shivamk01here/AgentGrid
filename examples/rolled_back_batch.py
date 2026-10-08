@@ -3,7 +3,7 @@
 Runs entirely in memory - no database, no payment provider, no API key. Two
 captures land, the third effect is a payout that cannot be undone, and the
 rollback has to tell you the difference between what it reversed and what it
-left behind.
+left behind. It is planned first, so you know that before you commit to it.
 
     python examples/rolled_back_batch.py
 """
@@ -81,7 +81,16 @@ async def main() -> None:
         print(f"                {effect.kind.value:<8} {effect.amount}")
 
     # --- ...and then something downstream goes wrong ----------------------
-    print("\nsomething breaks, roll the whole thing back\n")
+    # A rollback cannot be taken back, so look before pulling the lever. The
+    # plan claims nothing and sends nothing; the run is still RUNNING after.
+    print("\nsomething breaks - what would a rollback do?\n")
+    plan = await compensator.plan(await runs.get(tenant, run.id))
+    for step in plan.steps:
+        undo = f" by {step.reversal_kind.value}" if step.reversal_kind else ""
+        print(f"plan          -> {step.kind.value:<8} {step.amount}  {step.verdict.value}{undo}")
+    print(f"              would end clean: {plan.complete}")
+
+    print("\nroll it back anyway, the captures should not stand\n")
     report = await compensator.compensate(await runs.get(tenant, run.id))
 
     print(f"rollback      -> {report}")
