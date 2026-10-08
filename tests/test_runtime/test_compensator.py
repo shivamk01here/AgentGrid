@@ -34,7 +34,7 @@ from ledgerloop.core.ids import ActionId, ApprovalId, IdempotencyKey, TenantId
 from ledgerloop.core.models import Action, ActionReceipt, RunSpec
 from ledgerloop.core.money import Money
 from ledgerloop.runtime import ActionExecutor, Compensator
-from ledgerloop.runtime.compensator import reversal_key
+from ledgerloop.runtime.compensator import ReversalVerdict, reversal_key
 from ledgerloop.runtime.effects import replay_effects
 
 AT = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
@@ -667,6 +667,186 @@ class TestTamperedLedger:
         report = await compensator.compensate(await runs.get(tenant, run.id))
 
         assert report.complete
+
+
+class TestPlanningARollback:
+    async def test_a_plan_changes_nothing(
+        self, compensator, executor, runs, ledger, idempotency, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        entries_before = len(await ledger.read(tenant, run.id))
+        claims_before = len(idempotency.snapshot())
+
+        await compensator.plan(await runs.get(tenant, run.id))
+
+        # The whole point: you can ask, and the answer costs nothing.
+        assert dispatcher.compensated == []
+        assert len(idempotency.snapshot()) == claims_before
+        assert len(await ledger.read(tenant, run.id)) == entries_before
+        assert (await runs.get(tenant, run.id)).state is RunState.RUNNING
+
+    async def test_a_clean_run_plans_a_clean_rollback(
+        self, compensator, executor, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        action = capture("ord_1")
+        await apply(executor, run, action)
+
+        plan = await compensator.plan(await runs.get(tenant, run.id))
+
+        (step,) = plan.steps
+        assert step.action_id == action.id
+        assert step.verdict is ReversalVerdict.REVERSE
+        assert step.reversal_kind is ActionKind.REFUND
+        assert step.amount == action.amount
+        assert plan.complete
+        assert plan.to_reverse == plan.steps
+        assert plan.stranded == ()
+
+    async def test_steps_come_newest_first(self, compensator, executor, runs, tenant, clock):
+        run = await started_run(runs, tenant, clock)
+        first, second = capture("ord_1"), capture("ord_2")
+        await apply(executor, run, first)
+        await apply(executor, run, second)
+
+        plan = await compensator.plan(await runs.get(tenant, run.id))
+
+        assert [s.action_id for s in plan.steps] == [second.id, first.id]
+
+    async def test_an_irreversible_effect_is_planned_as_stranded(
+        self, compensator, executor, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        await apply(executor, run, payout("ord_9"))
+
+        plan = await compensator.plan(await runs.get(tenant, run.id))
+
+        assert not plan.complete
+        (stranded,) = plan.stranded
+        assert stranded.kind is ActionKind.PAYOUT
+        assert stranded.verdict is ReversalVerdict.IRREVERSIBLE
+        assert stranded.reversal_kind is None
+        assert len(plan.to_reverse) == 1
+
+    async def test_an_effect_in_doubt_is_planned_as_in_doubt(
+        self, compensator, executor, runs, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        await apply(executor, run, capture("ord_1"))
+
+        plan = await compensator.plan(await runs.get(tenant, run.id))
+
+        assert plan.steps[0].verdict is ReversalVerdict.IN_DOUBT
+        assert not plan.complete
+
+    async def test_a_previous_refusal_is_planned_with_its_reason(
+        self, compensator, executor, runs, ledger, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        action = capture("ord_1")
+        await apply(executor, run, action)
+        effect = replay_effects(await ledger.read(tenant, run.id))[0]
+        key = reversal_key(effect)
+        await idempotency.claim(key, tenant, f"reverse:{action.id}:capture", at=clock.now())
+        await idempotency.settle(
+            key,
+            tenant,
+            ActionReceipt(
+                action_id=action.id,
+                state=IdempotencyState.FAILED,
+                failure_reason="Reversal window has closed",
+            ),
+            at=clock.now(),
+        )
+
+        (step,) = (await compensator.plan(await runs.get(tenant, run.id))).steps
+
+        assert step.verdict is ReversalVerdict.PREVIOUSLY_REJECTED
+        assert step.detail == "Reversal window has closed"
+
+    async def test_a_reversal_already_out_is_planned_as_in_flight(
+        self, compensator, executor, runs, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        action = capture("ord_1")
+        await apply(executor, run, action)
+        key = IdempotencyKey.derive("reverse", str(action.idempotency_key))
+        await idempotency.claim(key, tenant, f"reverse:{action.id}:capture", at=clock.now())
+
+        (step,) = (await compensator.plan(await runs.get(tenant, run.id))).steps
+
+        assert step.verdict is ReversalVerdict.REVERSAL_IN_FLIGHT
+
+    async def test_an_already_reversed_effect_clears(
+        self, compensator, executor, runs, ledger, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        action = capture("ord_1")
+        await apply(executor, run, action)
+        effect = replay_effects(await ledger.read(tenant, run.id))[0]
+        key = reversal_key(effect)
+        await idempotency.claim(key, tenant, f"reverse:{action.id}:capture", at=clock.now())
+        await idempotency.settle(
+            key,
+            tenant,
+            ActionReceipt(action_id=action.id, state=IdempotencyState.SUCCEEDED),
+            at=clock.now(),
+        )
+
+        plan = await compensator.plan(await runs.get(tenant, run.id))
+
+        assert plan.steps[0].verdict is ReversalVerdict.ALREADY_REVERSED
+        assert plan.complete
+        assert plan.to_reverse == ()
+
+    async def test_the_plan_agrees_with_the_rollback(
+        self, compensator, executor, runs, dispatcher, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        await apply(executor, run, payout("ord_9"))
+        dispatcher.fail_next(FailureClass.INDETERMINATE)
+        await apply(executor, run, capture("ord_2"))
+
+        plan = await compensator.plan(await runs.get(tenant, run.id))
+        report = await compensator.compensate(await runs.get(tenant, run.id))
+
+        # A preview that disagreed with the real thing would be worse than
+        # no preview at all.
+        assert plan.complete == report.complete
+        assert len(plan.to_reverse) == report.compensated
+        assert len(plan.stranded) == report.stranded
+
+    async def test_a_halted_run_can_be_planned_for(
+        self, compensator, executor, runs, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        run = await runs.get(tenant, run.id)
+        halted = await runs.save(
+            run.await_approval(ApprovalId.generate(), at=clock.now()),
+            expected_version=run.version,
+        )
+
+        plan = await compensator.plan(halted)
+
+        assert plan.complete
+        assert (await runs.get(tenant, run.id)).state is RunState.AWAITING_APPROVAL
+
+    async def test_a_tampered_chain_gets_no_plan(
+        self, compensator, executor, runs, ledger, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        chain = ledger._chains[(tenant.value, run.id.value)]
+        dispatched = next(e for e in chain if e.payload.get("amount_minor") is not None)
+        dispatched.payload["amount_minor"] = 25_000_000
+
+        with pytest.raises(LedgerIntegrityError):
+            await compensator.plan(await runs.get(tenant, run.id))
 
 
 class _RefusingDispatcher(RecordingDispatcher):
