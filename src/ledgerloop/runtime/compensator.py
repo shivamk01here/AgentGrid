@@ -31,12 +31,19 @@ the run's hash chain, and a chain that has been edited - an amount changed, a
 settlement deleted - would have this send the wrong refund to the wrong
 place with every claim and receipt looking perfectly in order. The chain is
 verified before the run so much as enters COMPENSATING.
+
+A rollback cannot be taken back - the run never returns to RUNNING - so
+`plan` answers the question first: what would a rollback do to each effect,
+right now, and would it end clean. It reads the same chain and the same
+claims and decides the same way, and it claims nothing, dispatches nothing
+and leaves the run where it is.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
+from enum import StrEnum, unique
 from typing import TYPE_CHECKING
 
 from ledgerloop.core.enums import IdempotencyState, LedgerEventType, RunState, StopReason
@@ -46,8 +53,10 @@ from ledgerloop.core.models import ActionReceipt
 from ledgerloop.runtime.effects import replay_effects
 
 if TYPE_CHECKING:
-    from ledgerloop.core.ids import TenantId
+    from ledgerloop.core.enums import ActionKind
+    from ledgerloop.core.ids import ActionId, RunId, TenantId
     from ledgerloop.core.models import IdempotencyRecord, Run
+    from ledgerloop.core.money import Money
     from ledgerloop.core.ports import (
         ActionDispatcher,
         Clock,
@@ -59,7 +68,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["CompensationReport", "Compensator"]
+__all__ = [
+    "CompensationPlan",
+    "CompensationReport",
+    "Compensator",
+    "PlannedReversal",
+    "ReversalVerdict",
+]
 
 _REVERSAL_PREFIX = "reverse:"
 """What every reversal claim's fingerprint starts with. An action's own
@@ -99,6 +114,74 @@ class CompensationReport:
             f"replayed={self.replayed} irreversible={self.irreversible} "
             f"unresolved={self.unresolved} failed={self.failed}"
         )
+
+
+@unique
+class ReversalVerdict(StrEnum):
+    """What a rollback started now would do with one standing effect."""
+
+    REVERSE = "reverse"
+    """A reversal would be dispatched for it."""
+
+    ALREADY_REVERSED = "already reversed"
+    """An earlier rollback reversed it. Nothing would be sent."""
+
+    IRREVERSIBLE = "irreversible"
+    """Its kind has no reversal. It would be left for a human."""
+
+    IN_DOUBT = "in doubt"
+    """Nobody knows whether it landed. Reconcile it before rolling back."""
+
+    REVERSAL_IN_FLIGHT = "reversal in flight"
+    """A reversal is already out with no answer. It would not be sent twice."""
+
+    PREVIOUSLY_REJECTED = "previously rejected"
+    """The provider refused a reversal of it before, and would again."""
+
+    @property
+    def clears(self) -> bool:
+        """True when this effect would not be left standing."""
+        return self in (ReversalVerdict.REVERSE, ReversalVerdict.ALREADY_REVERSED)
+
+
+@dataclass(frozen=True, slots=True)
+class PlannedReversal:
+    """One standing effect, and what a rollback would do with it."""
+
+    action_id: ActionId
+    kind: ActionKind
+    verdict: ReversalVerdict
+    amount: Money | None = None
+    counterparty: str | None = None
+    reversal_kind: ActionKind | None = None
+    """The kind that would undo it, when it has one."""
+    detail: str | None = None
+    """Why it would be left standing, when it would - a prior refusal's
+    reason, for instance."""
+
+
+@dataclass(frozen=True, slots=True)
+class CompensationPlan:
+    """A rollback worked out in advance, in the order it would run."""
+
+    run_id: RunId
+    steps: tuple[PlannedReversal, ...] = ()
+    """Newest effect first, the order `compensate` takes them in."""
+
+    @property
+    def complete(self) -> bool:
+        """True when a rollback now would end COMPENSATED rather than FAILED."""
+        return all(step.verdict.clears for step in self.steps)
+
+    @property
+    def to_reverse(self) -> tuple[PlannedReversal, ...]:
+        """The effects a reversal would actually be dispatched for."""
+        return tuple(s for s in self.steps if s.verdict is ReversalVerdict.REVERSE)
+
+    @property
+    def stranded(self) -> tuple[PlannedReversal, ...]:
+        """The effects a rollback now would leave out in the world."""
+        return tuple(s for s in self.steps if not s.verdict.clears)
 
 
 class Compensator:
@@ -166,6 +249,62 @@ class Compensator:
             report = await self._reverse(effect, rolling_back, report)
 
         return await self._finish(rolling_back, report)
+
+    async def plan(self, run: Run) -> CompensationPlan:
+        """Work out what `compensate` would do to `run`, without doing it.
+
+        Reads the run's chain and each effect's reversal claim and sorts the
+        effects the way a rollback would, newest first. Takes no claim,
+        dispatches nothing, writes nothing and does not move the run - so it
+        is safe on a run in any state, and a halted one can be planned for
+        before anybody decides to resume it into a rollback.
+
+        A plan is a reading, not a reservation. Another worker can settle,
+        reverse or claim something between this and `compensate`, and
+        `compensate` decides again from what it finds then.
+
+        Raises:
+            LedgerIntegrityError: The run's ledger does not verify. A plan
+                worked out from tampered evidence would be wrong in exactly
+                the way a rollback from it would be.
+        """
+        await self._ledger.verify_chain(run.tenant_id, run.id)
+        effects = replay_effects(await self._ledger.read(run.tenant_id, run.id))
+
+        steps = []
+        for effect in reversed(effects):
+            verdict, detail = await self._verdict(effect, run.tenant_id)
+            steps.append(
+                PlannedReversal(
+                    action_id=effect.action_id,
+                    kind=effect.kind,
+                    verdict=verdict,
+                    amount=effect.amount,
+                    counterparty=effect.counterparty,
+                    reversal_kind=effect.kind.reversal_kind,
+                    detail=detail,
+                )
+            )
+        return CompensationPlan(run_id=run.id, steps=tuple(steps))
+
+    async def _verdict(
+        self, effect: AppliedEffect, tenant_id: TenantId
+    ) -> tuple[ReversalVerdict, str | None]:
+        """What `_reverse` would make of `effect`, in the order it checks."""
+        if effect.indeterminate:
+            return ReversalVerdict.IN_DOUBT, "outcome unknown"
+        if effect.kind.reversal_kind is None:
+            return ReversalVerdict.IRREVERSIBLE, "kind is not reversible"
+
+        record = await self._idempotency.get(reversal_key(effect), tenant_id)
+        if record is None:
+            return ReversalVerdict.REVERSE, None
+        if record.state is IdempotencyState.SUCCEEDED:
+            return ReversalVerdict.ALREADY_REVERSED, None
+        if record.state is IdempotencyState.FAILED:
+            reason = None if record.receipt is None else record.receipt.failure_reason
+            return ReversalVerdict.PREVIOUSLY_REJECTED, reason
+        return ReversalVerdict.REVERSAL_IN_FLIGHT, "reconcile the reversal first"
 
     async def _reverse(
         self, effect: AppliedEffect, run: Run, report: CompensationReport
