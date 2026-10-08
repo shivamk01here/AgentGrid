@@ -168,11 +168,15 @@ class Action:
                     f"Action of kind {self.kind.value} requires an idempotency_key. "
                     "Derive it from the action's content with IdempotencyKey.derive()."
                 )
-            if not self.amount.is_positive:
-                raise ValueError(
-                    f"Action of kind {self.kind.value} requires a positive amount, "
-                    f"got {self.amount}"
-                )
+        # Any kind that carries an amount, not only the ones that move value.
+        # Policy holds amounts against thresholds and the ceiling from below,
+        # so a hold of minus fifty lakh would sit under every one of them.
+        # Direction belongs in the kind - a refund, a release - never the sign.
+        if self.amount is not None and not self.amount.is_positive:
+            raise ValueError(
+                f"Action of kind {self.kind.value} requires a positive amount, "
+                f"got {self.amount}"
+            )
 
     def fingerprint(self) -> str:
         """Stable digest of what this action *does*.

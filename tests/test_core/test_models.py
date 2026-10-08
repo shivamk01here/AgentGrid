@@ -101,6 +101,27 @@ class TestAction:
                 idempotency_key=IdempotencyKey.derive("refund", "zero"),
             )
 
+    @pytest.mark.parametrize("figure", ["-5000000", "0"])
+    def test_a_hold_cannot_carry_a_negative_or_zero_amount(self, figure):
+        # A hold moves no value, but policy still weighs its amount, and from
+        # below: a negative one would sit under every threshold there is.
+        with pytest.raises(ValueError, match="positive amount"):
+            Action(
+                id=ActionId.generate(),
+                kind=ActionKind.HOLD,
+                description="Block the merchant's balance",
+                amount=Money.from_major(figure, Currency.INR),
+            )
+
+    def test_a_hold_with_a_positive_amount_is_fine(self):
+        action = Action(
+            id=ActionId.generate(),
+            kind=ActionKind.HOLD,
+            description="Block the merchant's balance",
+            amount=Money.from_major("50000", Currency.INR),
+        )
+        assert action.amount == Money.from_major("50000", Currency.INR)
+
     def test_read_only_action_needs_neither(self):
         action = Action(id=ActionId.generate(), kind=ActionKind.READ, description="Fetch")
         assert action.amount is None
