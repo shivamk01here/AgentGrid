@@ -5,7 +5,7 @@ when you didn't, so most of these are about one of those two.
 """
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -417,6 +417,48 @@ class TestThingsItRefusesToDo:
         assert len(effects) == 1
         assert effects[0].kind is ActionKind.CAPTURE
 
+
+    async def test_a_raised_refusal_settles_the_reversal_claim(
+        self, compensator, executor, runs, ledger, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        effect = replay_effects(await ledger.read(tenant, run.id))[0]
+
+        compensator = _with_dispatcher(compensator, _RefusingDispatcher())
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        # The provider answered. Left in flight, the claim says nobody knows.
+        record = await idempotency.get(reversal_key(effect), tenant)
+        assert record.state is IdempotencyState.FAILED
+        assert "Reversal window has closed" in (record.receipt.failure_reason or "")
+
+    async def test_a_second_rollback_after_a_refusal_still_says_refused(
+        self, compensator, executor, runs, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        compensator = _with_dispatcher(compensator, _RefusingDispatcher())
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        again = await compensator.compensate(_pretend_running(await runs.get(tenant, run.id)))
+
+        # Not "already in flight": nothing is in flight, and a human reading
+        # unresolved would wait on a reconciler instead of picking up the phone.
+        assert again.failed == 1
+        assert again.unresolved == 0
+
+    async def test_a_refused_reversal_is_not_left_for_the_reconciler(
+        self, compensator, executor, runs, idempotency, tenant, clock
+    ):
+        run = await started_run(runs, tenant, clock)
+        await apply(executor, run, capture("ord_1"))
+        compensator = _with_dispatcher(compensator, _RefusingDispatcher())
+        await compensator.compensate(await runs.get(tenant, run.id))
+
+        stale = [r async for r in idempotency.find_in_flight(older_than=AT + timedelta(days=1))]
+
+        assert stale == []
 
     async def test_a_refusal_that_comes_back_as_a_receipt_is_not_success_either(
         self, compensator, executor, runs, tenant, clock

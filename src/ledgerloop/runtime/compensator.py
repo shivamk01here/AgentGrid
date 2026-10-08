@@ -42,11 +42,12 @@ from typing import TYPE_CHECKING
 from ledgerloop.core.enums import IdempotencyState, LedgerEventType, RunState, StopReason
 from ledgerloop.core.errors import IndeterminateError, LedgerloopError, StateTransitionError
 from ledgerloop.core.ids import IdempotencyKey
+from ledgerloop.core.models import ActionReceipt
 from ledgerloop.runtime.effects import replay_effects
 
 if TYPE_CHECKING:
     from ledgerloop.core.ids import TenantId
-    from ledgerloop.core.models import ActionReceipt, IdempotencyRecord, Run
+    from ledgerloop.core.models import IdempotencyRecord, Run
     from ledgerloop.core.ports import (
         ActionDispatcher,
         Clock,
@@ -245,9 +246,22 @@ class Compensator:
             )
             return replace(report, unresolved=report.unresolved + 1)
         except (LedgerloopError, NotImplementedError, ValueError) as exc:
-            # The claim stays as it is. An unanswered reversal is exactly as
-            # dangerous as an unanswered payment, and gets the same treatment.
+            # A definitive no, raised rather than returned. The claim is
+            # settled as failed, the same as when the no comes back as a
+            # receipt: left in flight, the next rollback would report a
+            # refused reversal as one still going out, and the reconciler
+            # would go and ask the provider a question it has answered.
             logger.exception("Could not reverse effect %s on run %s", effect.action_id, run.id)
+            await self._settle(
+                reversal_key(effect),
+                run.tenant_id,
+                ActionReceipt(
+                    action_id=effect.action_id,
+                    state=IdempotencyState.FAILED,
+                    failure_reason=str(exc),
+                    settled_at=self._clock.now(),
+                ),
+            )
             await self._write(run, effect, reversed_ok=False, detail=str(exc))
             return replace(report, failed=report.failed + 1)
 
