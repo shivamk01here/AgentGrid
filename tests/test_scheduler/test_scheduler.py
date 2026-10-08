@@ -120,6 +120,36 @@ class TestScheduler:
         await scheduler.stop()
         assert ran is True
 
+    def test_the_delay_counts_from_when_the_task_is_added(self):
+        task = ScheduledTask(name="warm-up", handler=noop_task, delay_seconds=10.0)
+        # Built at startup, registered a minute later once its dependencies
+        # were ready. It has not waited ten seconds on the scheduler yet.
+        task._scheduled_at = time.time() - 60.0
+
+        Scheduler().add_task(task)
+
+        assert task.should_run is False
+
+    @pytest.mark.asyncio
+    async def test_a_task_added_late_still_waits_out_its_delay(self):
+        ran = False
+
+        async def delayed():
+            nonlocal ran
+            ran = True
+
+        task = ScheduledTask(
+            name="delayed", handler=delayed, interval_seconds=999.0, delay_seconds=5.0
+        )
+        task._scheduled_at = time.time() - 60.0
+        scheduler = Scheduler(tick_interval=0.05)
+        scheduler.add_task(task)
+        await scheduler.start()
+        await asyncio.sleep(0.2)
+        await scheduler.stop()
+
+        assert ran is False
+
     @pytest.mark.asyncio
     async def test_add_remove_during_loop_does_not_crash(self):
         scheduler = Scheduler(tick_interval=0.05)

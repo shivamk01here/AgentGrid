@@ -57,7 +57,14 @@ class Scheduler:
         self._task: asyncio.Task[None] | None = None
 
     def add_task(self, task: ScheduledTask) -> None:
-        """Register a scheduled task."""
+        """Register a scheduled task.
+
+        `delay_seconds` counts from here, not from when the task object was
+        built. A task constructed with the rest of the configuration at
+        startup and registered once its dependencies are up would otherwise
+        have spent its delay before the scheduler ever saw it.
+        """
+        task._scheduled_at = time.time()
         self._tasks[task.name] = task
         logger.info("Scheduled task: %s (every %ss)", task.name, task.interval_seconds)
 
